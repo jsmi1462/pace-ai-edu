@@ -1,0 +1,46 @@
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- Faculty profiles (email is the natural PK, sourced from Cloudflare header)
+CREATE TABLE IF NOT EXISTS faculty_profiles (
+    email               VARCHAR(255) PRIMARY KEY,
+    first_name          VARCHAR(100),
+    last_name           VARCHAR(100),
+    discipline          VARCHAR(100) NOT NULL,       -- e.g. "AP Chemistry", "7th Grade English"
+    grade_band          VARCHAR(50),                 -- e.g. "K-5", "6-8", "9-12"
+    years_experience    INT NOT NULL,                -- drives prompt persona selection
+    current_module      TEXT,                        -- unit/topic being taught right now
+    tailoring_query     TEXT,                        -- free-form improvement goals
+    is_active           BOOLEAN DEFAULT TRUE,
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Source-agnostic article store
+CREATE TABLE IF NOT EXISTS articles (
+    id                  SERIAL PRIMARY KEY,
+    source_id           VARCHAR(255) UNIQUE NOT NULL, -- URL hash or ERIC accession #
+    source              VARCHAR(100),                 -- 'Edutopia', 'ASCD', etc.
+    title               TEXT,
+    full_text           TEXT,                         -- scraped body (newspaper3k)
+    authors             TEXT,
+    publication_date    DATE,
+    url                 TEXT,
+    embedding           vector(768),                  -- pgvector
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Per-teacher evaluation & generated output
+CREATE TABLE IF NOT EXISTS teacher_article_matches (
+    id                  SERIAL PRIMARY KEY,
+    teacher_email       VARCHAR(255) NOT NULL REFERENCES faculty_profiles(email) ON DELETE CASCADE,
+    article_id          INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+    decision            VARCHAR(20),                  -- 'Yes' | 'No' | 'Error'
+    summary             TEXT,                         -- 2-sentence summary
+    action_steps        TEXT,                         -- 3 actionable steps (JSON array or numbered text)
+    mission_alignment   TEXT,                         -- 1-sentence Pace mission tie-in
+    similarity_score    FLOAT,
+    status              VARCHAR(50) DEFAULT 'pending',
+    date_evaluated      DATE DEFAULT CURRENT_DATE,
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (teacher_email, article_id)
+);

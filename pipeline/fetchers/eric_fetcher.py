@@ -1,0 +1,256 @@
+"""
+ERIC API fetcher — Education Resources Information Center.
+Free, no API key, 2M+ peer-reviewed education articles.
+API docs: https://api.ies.ed.gov/eric/
+"""
+
+import hashlib
+import json
+import logging
+import os
+import time
+from datetime import date, datetime
+
+import requests
+
+from ..config import CONFIG
+
+_CACHE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".eric_cache.json")
+_CACHE_TTL_HOURS = 24
+
+ERIC_API_URL = "https://api.ies.ed.gov/eric/"
+
+# Publication types worth keeping (peer-reviewed research and practitioner reports)
+GOOD_PUB_TYPES = {
+    "journal articles",
+    "reports - research",
+    "reports - descriptive",
+    "reports - evaluative",
+    "dissertations/theses",
+    "information analyses",
+}
+
+# Broad topic queries that sweep up the full range of K-12 teaching practice.
+# These are intentionally general — per-teacher relevance is handled downstream
+# by embeddings + LLM evaluation.
+ERIC_BASE_QUERIES = [
+    "classroom instruction teaching strategies",
+    "student engagement learning outcomes",
+    "formative assessment feedback students",
+    "differentiated instruction diverse learners",
+    "project-based learning inquiry",
+    "literacy reading writing instruction",
+    "mathematics instruction problem solving",
+    "science inquiry STEM teaching",
+    "social-emotional learning classroom",
+    "teacher professional development practice",
+    "high school secondary curriculum",
+    "middle school adolescent learning",
+    "elementary school early childhood",
+    "discussion-based learning Socratic",
+    "metacognition student learning strategies",
+    "cooperative learning peer collaboration",
+    "growth mindset motivation students",
+    "culturally responsive teaching",
+    "technology integration digital learning",
+    "restorative practices classroom management",
+]
+
+
+def _parse_date(year_str) -> date | None:
+    if not year_str:
+        return None
+    try:
+        return datetime(int(str(year_str)[:4]), 1, 1).date()
+    except Exception:
+        return None
+
+
+def _is_recent(pub_date: date | None, max_age_days: int) -> bool:
+    if pub_date is None:
+        return False  # reject if we can't determine age
+    return (date.today() - pub_date).days <= max_age_days
+
+
+def fetch_eric_articles(
+    max_per_query: int = 200,
+    max_age_days: int = None,
+) -> list[dict]:
+    """
+    Runs all ERIC_BASE_QUERIES and returns a deduplicated list of article dicts.
+    Results are cached to .eric_cache.json for _CACHE_TTL_HOURS to avoid re-fetching on restarts.
+    """
+    if max_age_days is None:
+        max_age_days = CONFIG.MAX_ARTICLE_AGE_DAYS
+
+    # Return cached results if fresh
+    if os.path.exists(_CACHE_PATH):
+        try:
+            with open(_CACHE_PATH) as f:
+                cached = json.load(f)
+            age_hours = (time.time() - cached["timestamp"]) / 3600
+            if age_hours < _CACHE_TTL_HOURS:
+                articles = cached["articles"]
+                # Restore date objects
+                for a in articles:
+                    if a.get("publication_date"):
+                        a["publication_date"] = date.fromisoformat(a["publication_date"])
+                logging.info(f"ERIC cache hit ({age_hours:.1f}h old): {len(articles)} articles.")
+                return articles
+        except Exception:
+            pass  # corrupt cache — re-fetch
+
+    seen_ids: set[str] = set()
+    all_articles: list[dict] = []
+
+    for query in ERIC_BASE_QUERIES:
+        try:
+            articles = _fetch_query(query, max_per_query, max_age_days, seen_ids)
+            all_articles.extend(articles)
+            logging.info(f"ERIC query '{query[:40]}...' → {len(articles)} articles")
+            time.sleep(0.5)  # polite rate limiting
+        except Exception as e:
+            logging.error(f"ERIC fetch failed for query '{query}': {e}", exc_info=True)
+
+    logging.info(f"ERIC total: {len(all_articles)} unique articles across {len(ERIC_BASE_QUERIES)} queries.")
+
+    # Write cache (serialize date objects to strings)
+    try:
+        serializable = []
+        for a in all_articles:
+            row = dict(a)
+            if isinstance(row.get("publication_date"), date):
+                row["publication_date"] = row["publication_date"].isoformat()
+            serializable.append(row)
+        with open(_CACHE_PATH, "w") as f:
+            json.dump({"timestamp": time.time(), "articles": serializable}, f)
+        logging.info(f"ERIC cache written to {_CACHE_PATH}")
+    except Exception as e:
+        logging.warning(f"ERIC cache write failed: {e}")
+
+    return all_articles
+
+
+def fetch_eric_for_teacher(
+    teacher: dict,
+    max_results: int = 100,
+    keywords: list[str] = None,
+) -> list[dict]:
+    """
+    Fetches ERIC articles targeted to a single teacher.
+
+    If `keywords` is provided (generated by LLMEvaluator.generate_keywords),
+    they are used as the search query. Otherwise falls back to simple profile
+    field concatenation.
+    """
+    query = _build_teacher_query(teacher, keywords)
+    if not query:
+        return []
+
+    seen: set[str] = set()
+    articles = _fetch_query(query, max_results, CONFIG.MAX_ARTICLE_AGE_DAYS, seen)
+    logging.info(
+        f"ERIC targeted ({teacher.get('email','?')}): "
+        f"query='{query[:60]}' → {len(articles)} articles"
+    )
+    return articles
+
+
+def _build_teacher_query(teacher: dict, keywords: list[str] = None) -> str:
+    """Returns an ERIC search string from LLM-generated keywords or profile fields."""
+    if keywords:
+        return " ".join(keywords)
+
+    # Fallback: concatenate key profile fields
+    parts = [
+        teacher.get('discipline', ''),
+        teacher.get('current_module', ''),
+        ' '.join(teacher.get('tailoring_query', '').split()[:8]),
+    ]
+    return ' '.join(p for p in parts if p)
+
+
+def _fetch_query(
+    query: str,
+    max_results: int,
+    max_age_days: int,
+    seen_ids: set[str],
+) -> list[dict]:
+    """Fetches up to max_results articles for a single ERIC query, with pagination."""
+    articles = []
+    page_size = min(100, max_results)
+    start = 0
+
+    while len(articles) < max_results:
+        params = {
+            "search":  query,
+            "rows":    page_size,
+            "start":   start,
+            "fields":  "id,title,description,author,source,publicationdateyear,publicationtype,subject,educationlevel,url",
+            "format":  "json",
+        }
+        try:
+            resp = requests.get(ERIC_API_URL, params=params, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as e:
+            logging.warning(f"ERIC API error (start={start}): {e}")
+            break
+
+        docs = data.get("response", {}).get("docs", [])
+        if not docs:
+            break
+
+        for doc in docs:
+            eric_id = doc.get("id", "")
+            if not eric_id or eric_id in seen_ids:
+                continue
+
+            # Filter by publication type
+            pub_types = [pt.lower() for pt in (doc.get("publicationtype") or [])]
+            if pub_types and not any(gt in pub_types for gt in GOOD_PUB_TYPES):
+                continue
+
+            pub_date = _parse_date(doc.get("publicationdateyear"))
+            if not _is_recent(pub_date, max_age_days):
+                continue
+
+            # Skip articles with no abstract
+            abstract = (doc.get("description") or "").strip()
+            if len(abstract) < 100:
+                continue
+
+            seen_ids.add(eric_id)
+
+            # Build URL — ERIC links are predictable
+            url = doc.get("url") or f"https://eric.ed.gov/?id={eric_id}"
+
+            # Stable source_id
+            source_id = hashlib.sha256(eric_id.encode()).hexdigest()[:32]
+
+            authors = doc.get("author") or []
+            authors_str = ", ".join(authors) if isinstance(authors, list) else str(authors)
+
+            articles.append({
+                "source_id":        source_id,
+                "source":           "ERIC",
+                "title":            (doc.get("title") or "").strip(),
+                "full_text":        abstract,
+                "authors":          authors_str,
+                "publication_date": pub_date,
+                "url":              url,
+                "_eric_id":         eric_id,
+                "_pub_types":       pub_types,
+                "_subjects":        doc.get("subject") or [],
+                "_edu_levels":      doc.get("educationlevel") or [],
+                "_journal":         doc.get("source") or "",
+            })
+
+            if len(articles) >= max_results:
+                break
+
+        start += len(docs)
+        if start >= data.get("response", {}).get("numFound", 0):
+            break
+
+    return articles
