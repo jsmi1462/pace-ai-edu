@@ -11,12 +11,17 @@ else
   exit 1
 fi
 
-# Build frontend (skipped in dev mode: START_MODE=dev)
-if [ "${START_MODE}" != "dev" ]; then
+# Build frontend
+# START_MODE=dev    → skip build, run Vite dev server separately
+# START_MODE=service → skip build (already built), just start Express
+# (anything else)   → build now
+if [ "${START_MODE}" = "dev" ]; then
+  echo "Dev mode: skipping build. Run 'cd frontend && npm run dev' separately."
+elif [ "${START_MODE}" = "service" ]; then
+  echo "Service mode: skipping build (run 'cd frontend && npm run build' to rebuild)."
+else
   echo "Building frontend..."
   (cd frontend && npm install --silent && npm run build)
-else
-  echo "Dev mode: skipping frontend build. Run 'cd frontend && npm run dev' separately."
 fi
 
 # Activate Python virtual environment

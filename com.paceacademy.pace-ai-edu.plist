@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.paceacademy.pace-ai-edu</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/compsci/Documents/Github/pace-ai-edu/start.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/compsci/Documents/Github/pace-ai-edu</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>/Users/compsci</string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/opt/homebrew/opt/postgresql@17/bin:/opt/homebrew/opt/python@3.13/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>DYLD_LIBRARY_PATH</key>
+        <string>/opt/homebrew/opt/expat/lib</string>
+        <key>START_MODE</key>
+        <string>service</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/compsci/Documents/Github/pace-ai-edu/logs/service.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/compsci/Documents/Github/pace-ai-edu/logs/service-error.log</string>
+</dict>
+</plist>
