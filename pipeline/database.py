@@ -308,6 +308,16 @@ class DatabaseManager:
             cur.execute("SELECT COUNT(*) FROM articles;")
             return cur.fetchone()[0]
 
+    def get_evaluated_article_ids(self, teacher_email: str) -> set[int]:
+        """Returns article IDs already evaluated (Yes or No) for this teacher — skip re-evaluation."""
+        with self.conn.cursor() as cur:
+            cur.execute(
+                """SELECT article_id FROM teacher_article_matches
+                   WHERE teacher_email = %s AND decision IN ('Yes', 'No')""",
+                (teacher_email,)
+            )
+            return {row[0] for row in cur.fetchall()}
+
     def get_already_seen_source_ids(self, source_ids: list[str]) -> set[str]:
         if not source_ids:
             return set()

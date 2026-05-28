@@ -20,6 +20,7 @@ const Digest = () => {
   const [hasProfile, setHasProfile] = useState(true);
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
+  const [noMatches, setNoMatches] = useState(false);
   const [progress, setProgress] = useState({ evaluated: 0, total: 50 });
   const pollRef = useRef(null);
   const pollStartRef = useRef(null);
@@ -50,8 +51,30 @@ const Digest = () => {
       try {
         const res = await axios.get('/api/digest/progress');
         setProgress(res.data);
+        checkComplete(res.data.evaluated, res.data.total);
       } catch (err) { /* silent */ }
     }, 8000);
+  };
+
+  const checkComplete = (evaluated, total) => {
+    if (evaluated >= total && total > 0) {
+      axios.get('/api/digest/me').then(res => {
+        if (res.data.articles.length > 0) {
+          setArticles(res.data.articles);
+          setFresh(res.data.fresh);
+          stopPolling();
+          setRegenerating(false);
+        } else {
+          stopPolling();
+          setRegenerating(false);
+          setNoMatches(true);
+        }
+      }).catch(() => {
+        stopPolling();
+        setRegenerating(false);
+        setNoMatches(true);
+      });
+    }
   };
 
   const fetchDigest = async () => {
@@ -100,6 +123,7 @@ const Digest = () => {
 
   const handleRegenerate = async () => {
     setRegenerating(true);
+    setNoMatches(false);
     setArticles([]);
     try {
       await axios.post('/api/digest/regenerate');
@@ -149,6 +173,10 @@ const Digest = () => {
           <h2 className="welcome-headline">Your weekly research digest, matched to your classroom.</h2>
           <p className="welcome-body">Every week, Pace Edu finds peer-reviewed research relevant to what you're teaching and translates it into plain-language summaries and ready-to-use action steps. Takes 2 minutes to set up.</p>
           <Link to="/profile?onboarding=true" className="btn-start">Get started →</Link>
+        </div>
+      ) : noMatches ? (
+        <div className="empty-state">
+          No new research matched your profile this run — check back after next Monday's update, or click Refresh to try again.
         </div>
       ) : articles.length === 0 ? (
         <div className="empty-state">

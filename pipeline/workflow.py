@@ -173,6 +173,17 @@ class WorkflowManager:
             logging.warning(f"  [{email}] No candidates — discipline pool may be empty.")
             return 0
 
+        # Skip articles already evaluated Yes/No — only process genuinely new ones
+        already_evaluated = self.db.get_evaluated_article_ids(email)
+        new_candidates = [c for c in candidates if c['_db_id'] not in already_evaluated]
+        logging.info(f"  [{email}] {len(new_candidates)} new candidates after skipping {len(already_evaluated)} already evaluated.")
+
+        if not new_candidates:
+            logging.info(f"  [{email}] Nothing new to evaluate.")
+            return 0
+
+        candidates = new_candidates
+
         # 3. LLM evaluation (sequential — LM Studio processes one at a time anyway)
         results = []
         with ThreadPoolExecutor(max_workers=CONFIG.MAX_LLM_CONCURRENT_REQUESTS) as ex:
