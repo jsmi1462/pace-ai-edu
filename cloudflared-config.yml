@@ -1,0 +1,7 @@
+tunnel: 5efcca4f-0179-4fbc-90dd-da8c7a4a01a9
+credentials-file: /Users/compsci/.cloudflared/5efcca4f-0179-4fbc-90dd-da8c7a4a01a9.json
+
+ingress:
+  - hostname: app.apexeducation.xyz
+    service: http://localhost:3001
+  - service: http_status:404
