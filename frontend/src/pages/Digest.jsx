@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 
 const formatDate = (dateStr) => {
@@ -16,23 +17,55 @@ const POLL_TIMEOUT = 15 * 60 * 1000;
 const Digest = () => {
   const [articles, setArticles] = useState([]);
   const [fresh, setFresh] = useState(true);
+  const [hasProfile, setHasProfile] = useState(true);
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
+  const [progress, setProgress] = useState({ evaluated: 0, total: 50 });
   const pollRef = useRef(null);
   const pollStartRef = useRef(null);
+  const progressRef = useRef(null);
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
 
-  useEffect(() => { fetchDigest(); return () => stopPolling(); }, []);
+  useEffect(() => {
+    const startGenerating = searchParams.get('generating') === 'true';
+    if (startGenerating) {
+      navigate('/', { replace: true });
+      setLoading(false);
+      setRegenerating(true);
+      pollForResults();
+    } else {
+      fetchDigest();
+    }
+    return () => stopPolling();
+  }, []);
 
   const stopPolling = () => {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    if (progressRef.current) { clearInterval(progressRef.current); progressRef.current = null; }
+  };
+
+  const startProgressPolling = () => {
+    progressRef.current = setInterval(async () => {
+      try {
+        const res = await axios.get('/api/digest/progress');
+        setProgress(res.data);
+      } catch (err) { /* silent */ }
+    }, 8000);
   };
 
   const fetchDigest = async () => {
     setLoading(true);
     try {
-      const res = await axios.get('/api/digest/me');
-      setArticles(res.data.articles);
-      setFresh(res.data.fresh);
+      const [digestRes, profileRes] = await Promise.allSettled([
+        axios.get('/api/digest/me'),
+        axios.get('/api/profile'),
+      ]);
+      if (digestRes.status === 'fulfilled') {
+        setArticles(digestRes.value.data.articles);
+        setFresh(digestRes.value.data.fresh);
+      }
+      setHasProfile(profileRes.status === 'fulfilled');
     } catch (err) {
       console.error('Error fetching digest:', err);
     } finally {
@@ -41,6 +74,8 @@ const Digest = () => {
   };
 
   const pollForResults = () => {
+    setProgress({ evaluated: 0, total: 50 });
+    startProgressPolling();
     pollStartRef.current = Date.now();
     pollRef.current = setInterval(async () => {
       if (Date.now() - pollStartRef.current > POLL_TIMEOUT) {
@@ -53,6 +88,7 @@ const Digest = () => {
         if (res.data.articles.length > 0) {
           setArticles(res.data.articles);
           setFresh(res.data.fresh);
+          setHasProfile(true);
           stopPolling();
           setRegenerating(false);
         }
@@ -95,11 +131,28 @@ const Digest = () => {
       {regenerating ? (
         <div className="generating-state">
           <p className="generating-headline">Finding your articles…</p>
-          <p className="generating-subtext">The AI is reading through research right now. This takes a few minutes — sit tight.</p>
+          <p className="generating-subtext">We're reading through recent research and matching it to your classroom. This page will update automatically when your digest is ready.</p>
+          <div className="progress-bar-track">
+            <div
+              className="progress-bar-fill"
+              style={{ width: `${Math.min(100, Math.round((progress.evaluated / progress.total) * 100))}%` }}
+            />
+          </div>
+          <p className="progress-label">
+            {progress.evaluated === 0
+              ? 'Starting up…'
+              : `${progress.evaluated} of ~${progress.total} articles evaluated`}
+          </p>
+        </div>
+      ) : !hasProfile ? (
+        <div className="welcome-state">
+          <h2 className="welcome-headline">Your weekly research digest, matched to your classroom.</h2>
+          <p className="welcome-body">Every week, Pace Edu finds peer-reviewed research relevant to what you're teaching and translates it into plain-language summaries and ready-to-use action steps. Takes 2 minutes to set up.</p>
+          <Link to="/profile?onboarding=true" className="btn-start">Get started →</Link>
         </div>
       ) : articles.length === 0 ? (
         <div className="empty-state">
-          No articles yet — fill out your profile so we know what to look for.
+          Your digest is empty — click Refresh to generate your first reading list.
         </div>
       ) : (
       <>

@@ -53,6 +53,24 @@ router.get('/me', async (req, res) => {
   }
 });
 
+// GET /digest/progress - How many articles evaluated today for this teacher
+router.get('/progress', async (req, res) => {
+  const email = req.user;
+  try {
+    const result = await pool.query(
+      `SELECT COUNT(*) AS evaluated
+       FROM teacher_article_matches
+       WHERE teacher_email = $1
+         AND date_evaluated = CURRENT_DATE`,
+      [email]
+    );
+    const evaluated = parseInt(result.rows[0].evaluated, 10);
+    res.json({ evaluated, total: 50 });
+  } catch (err) {
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 // GET /digest/:email - Fetch matched articles for a teacher (legacy support)
 router.get('/:email', async (req, res) => {
   const { email } = req.params;

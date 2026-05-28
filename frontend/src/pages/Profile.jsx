@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 const Profile = () => {
@@ -45,6 +46,10 @@ const Profile = () => {
     { value: "counseling", label: "Cross-Division: Counseling & SEL" }
   ];
 
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const isOnboarding = searchParams.get('onboarding') === 'true';
+
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
 
@@ -72,7 +77,12 @@ const Profile = () => {
     setMessage('Saving…');
     try {
       await axios.post('/api/profile', profile);
-      setMessage('Saved.');
+      if (isOnboarding) {
+        await axios.post('/api/digest/regenerate');
+        navigate('/?generating=true');
+      } else {
+        setMessage('Saved.');
+      }
     } catch (err) {
       setMessage('Error saving.');
     }
@@ -82,8 +92,18 @@ const Profile = () => {
 
   return (
     <div className="page-content">
-      <h1 className="profile-title">Your Profile</h1>
-      <p className="profile-subtitle">Tell us about your classroom so we know what to find for you.</p>
+      {isOnboarding ? (
+        <>
+          <h1 className="profile-title">Welcome to Pace Edu.</h1>
+          <p className="profile-subtitle">Tell us about your classroom and we'll find peer-reviewed research matched to your teaching — every week, automatically. Fill this out once and we'll take it from there.</p>
+          <p className="onboarding-eta">After you save, your first digest will be ready in about 5–10 minutes.</p>
+        </>
+      ) : (
+        <>
+          <h1 className="profile-title">Your Profile</h1>
+          <p className="profile-subtitle">Tell us about your classroom so we know what to find for you.</p>
+        </>
+      )}
 
       <form onSubmit={handleSubmit}>
         <div className="form-grid">
@@ -136,7 +156,9 @@ const Profile = () => {
           <textarea className="form-input" name="tailoring_query" value={profile.tailoring_query || ''} onChange={handleChange} placeholder="e.g. I want to improve student engagement during lectures…" />
         </div>
 
-        <button type="submit" className="btn-save">Save Profile</button>
+        <button type="submit" className="btn-save">
+          {isOnboarding ? 'Save & Find My Articles' : 'Save Profile'}
+        </button>
         {message && <p className="form-message">{message}</p>}
       </form>
     </div>

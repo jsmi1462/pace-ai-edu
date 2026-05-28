@@ -242,6 +242,46 @@ body {
   font-size: 0.875rem;
   color: var(--ink-mid);
 }
+.welcome-state {
+  padding: 5rem 0 4rem;
+  border-top: var(--rule-heavy);
+  max-width: 560px;
+}
+.welcome-headline {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 400;
+  color: var(--ink-dark);
+  line-height: 1.2;
+  margin: 0 0 1.25rem;
+}
+.welcome-body {
+  font-family: var(--font-body);
+  font-size: 1rem;
+  color: var(--ink-mid);
+  line-height: 1.6;
+  margin: 0 0 2rem;
+}
+.btn-start {
+  display: inline-block;
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cream);
+  background: var(--ink-dark);
+  padding: 0.75rem 1.5rem;
+  text-decoration: none;
+}
+.btn-start:hover {
+  background: var(--brick);
+}
+.onboarding-eta {
+  font-family: var(--font-ui);
+  font-size: 0.875rem;
+  color: var(--brick);
+  margin: 0 0 2.5rem;
+}
 .caught-up-banner {
   padding: 0.75rem 1rem;
   margin-bottom: 2rem;
@@ -266,7 +306,26 @@ body {
   font-family: var(--font-ui);
   font-size: 0.875rem;
   color: var(--ink-mid);
+  margin: 0 0 1.75rem;
+}
+.progress-bar-track {
+  width: 100%;
+  max-width: 420px;
+  height: 3px;
+  background: var(--rule-color, #e0d9ce);
+  margin-bottom: 0.6rem;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: var(--brick);
+  transition: width 1.2s ease;
+}
+.progress-label {
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  color: var(--ink-mid);
   margin: 0;
+  letter-spacing: 0.03em;
 }
 
 /* ─── Profile ────────────────────────────────── */
