@@ -15,6 +15,14 @@ class Config:
     # Native LM Studio API for thinking/reasoning models (Gemma 4, etc.)
     # When set, chat calls use /api/v1/chat instead of the OpenAI-compatible endpoint
     LLM_NATIVE_API_URL  = os.getenv("LLM_NATIVE_API_URL", "")
+    # Round-robin LLM endpoints for distributed evaluation (comma-separated base URLs).
+    # Falls back to LLM_BASE_URL if not set.
+    # e.g. http://100.104.98.2:1234/v1,http://100.116.114.61:1234/v1
+    LLM_ENDPOINTS: list[str] = [
+        ep.strip()
+        for ep in os.getenv("LLM_ENDPOINTS", "").split(",")
+        if ep.strip()
+    ] or [os.getenv("LLM_BASE_URL", "http://localhost:1234/v1")]
 
     # Logging
     LOG_FILE_PATH = os.getenv("LOG_FILE_PATH", "logs/pipeline.log")

@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import threading
 import time
 
 import requests
@@ -8,6 +9,25 @@ from openai import OpenAI
 from pydantic import BaseModel, Field, field_validator
 
 from .config import CONFIG
+
+
+class _EndpointPool:
+    """Thread-safe round-robin pool of LLM endpoints with per-endpoint OpenAI clients."""
+
+    def __init__(self, endpoints: list[str], api_key: str):
+        self._endpoints = endpoints
+        self._clients = [OpenAI(base_url=ep, api_key=api_key) for ep in endpoints]
+        self._idx = 0
+        self._lock = threading.Lock()
+
+    def __len__(self) -> int:
+        return len(self._endpoints)
+
+    def next(self) -> tuple[str, "OpenAI"]:
+        with self._lock:
+            i = self._idx
+            self._idx = (self._idx + 1) % len(self._endpoints)
+        return self._endpoints[i], self._clients[i]
 
 
 def _call_native_lmstudio(model: str, system_prompt: str, user_prompt: str, native_url: str) -> str:
@@ -66,43 +86,55 @@ from .prompts import get_system_prompt, get_search_keyword_prompt
 
 class LLMEvaluator:
     def __init__(self):
-        self.client = OpenAI(
-            base_url=CONFIG.LLM_BASE_URL,
-            api_key=CONFIG.LLM_API_KEY,
-        )
+        self.pool = _EndpointPool(CONFIG.LLM_ENDPOINTS, CONFIG.LLM_API_KEY)
         self.total_prompt_tokens     = 0
         self.total_completion_tokens = 0
+        logging.info(f"LLMEvaluator: {len(self.pool)} endpoint(s): {CONFIG.LLM_ENDPOINTS}")
 
     def _call(self, label: str, user_prompt: str, system_prompt: str, max_tokens: int = 1024) -> str:
-        last_error = "Unknown"
-        for attempt in range(CONFIG.LLM_RETRY_ATTEMPTS + 1):
-            try:
-                # Use LM Studio native API for thinking models (Gemma 4, etc.)
-                if CONFIG.LLM_NATIVE_API_URL:
+        # Native API path (single endpoint — no round-robin for native calls)
+        if CONFIG.LLM_NATIVE_API_URL:
+            for attempt in range(CONFIG.LLM_RETRY_ATTEMPTS + 1):
+                try:
                     return _call_native_lmstudio(
                         CONFIG.LLM_MODEL_NAME, system_prompt, user_prompt, CONFIG.LLM_NATIVE_API_URL
                     )
+                except Exception as e:
+                    last_error = str(e)
+                    if attempt < CONFIG.LLM_RETRY_ATTEMPTS:
+                        logging.warning(f"[{label}] Native LLM failed ({last_error}). Retrying...")
+                        time.sleep(CONFIG.LLM_RETRY_DELAY_SECONDS)
+            logging.error(f"[{label}] Native LLM failed definitively: {last_error}")
+            return f"LLM Error - {last_error}"
 
-                # Standard OpenAI-compatible endpoint
-                resp = self.client.chat.completions.create(
-                    model=CONFIG.LLM_MODEL_NAME,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user",   "content": user_prompt},
-                    ],
-                    max_tokens=max_tokens,
-                    temperature=0.2,
-                )
-                if resp.usage:
-                    self.total_prompt_tokens     += resp.usage.prompt_tokens
-                    self.total_completion_tokens += resp.usage.completion_tokens
-                return resp.choices[0].message.content.strip()
-            except Exception as e:
-                last_error = str(e)
-                if attempt < CONFIG.LLM_RETRY_ATTEMPTS:
-                    logging.warning(f"[{label}] LLM call failed ({last_error}). Retrying...")
-                    time.sleep(CONFIG.LLM_RETRY_DELAY_SECONDS)
-        logging.error(f"[{label}] LLM failed definitively: {last_error}")
+        # Round-robin across endpoints: try each once per round, retry up to LLM_RETRY_ATTEMPTS rounds
+        n = len(self.pool)
+        last_error = "Unknown"
+        for round_num in range(CONFIG.LLM_RETRY_ATTEMPTS + 1):
+            if round_num > 0:
+                logging.warning(f"[{label}] All {n} endpoint(s) failed. Waiting before retry round {round_num}...")
+                time.sleep(CONFIG.LLM_RETRY_DELAY_SECONDS * round_num)
+            for _ in range(n):
+                endpoint_url, client = self.pool.next()
+                try:
+                    resp = client.chat.completions.create(
+                        model=CONFIG.LLM_MODEL_NAME,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user",   "content": user_prompt},
+                        ],
+                        max_tokens=max_tokens,
+                        temperature=0.2,
+                    )
+                    if resp.usage:
+                        self.total_prompt_tokens     += resp.usage.prompt_tokens
+                        self.total_completion_tokens += resp.usage.completion_tokens
+                    return resp.choices[0].message.content.strip()
+                except Exception as e:
+                    last_error = str(e)
+                    logging.warning(f"[{label}] Endpoint {endpoint_url} failed ({last_error}). Trying next...")
+
+        logging.error(f"[{label}] LLM failed definitively across all endpoints: {last_error}")
         return f"LLM Error - {last_error}"
 
     def generate_keywords(self, teacher: dict) -> list[str]:
