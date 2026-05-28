@@ -8,11 +8,11 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>/Users/compsci/Documents/Github/pace-ai-edu/start.sh</string>
+        <string>/Users/compsci/pace-ai-edu/start.sh</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/compsci/Documents/Github/pace-ai-edu</string>
+    <string>/Users/compsci/pace-ai-edu</string>
 
     <key>EnvironmentVariables</key>
     <dict>
@@ -33,9 +33,9 @@
     <true/>
 
     <key>StandardOutPath</key>
-    <string>/Users/compsci/Documents/Github/pace-ai-edu/logs/service.log</string>
+    <string>/Users/compsci/pace-ai-edu/logs/service.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/compsci/Documents/Github/pace-ai-edu/logs/service-error.log</string>
+    <string>/Users/compsci/pace-ai-edu/logs/service-error.log</string>
 </dict>
 </plist>
