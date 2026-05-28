@@ -15,6 +15,7 @@ const POLL_TIMEOUT = 15 * 60 * 1000;
 
 const Digest = () => {
   const [articles, setArticles] = useState([]);
+  const [fresh, setFresh] = useState(true);
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
   const pollRef = useRef(null);
@@ -30,7 +31,8 @@ const Digest = () => {
     setLoading(true);
     try {
       const res = await axios.get('/api/digest/me');
-      setArticles(res.data);
+      setArticles(res.data.articles);
+      setFresh(res.data.fresh);
     } catch (err) {
       console.error('Error fetching digest:', err);
     } finally {
@@ -48,8 +50,9 @@ const Digest = () => {
       }
       try {
         const res = await axios.get('/api/digest/me');
-        if (res.data.length > 0) {
-          setArticles(res.data);
+        if (res.data.articles.length > 0) {
+          setArticles(res.data.articles);
+          setFresh(res.data.fresh);
           stopPolling();
           setRegenerating(false);
         }
@@ -99,6 +102,12 @@ const Digest = () => {
           No articles yet — fill out your profile so we know what to look for.
         </div>
       ) : (
+      <>
+        {!fresh && (
+          <div className="caught-up-banner">
+            You're all caught up — new articles arrive each Monday. Here's last week's reading in the meantime.
+          </div>
+        )}
         <div className="article-list">
           {articles.map((article, index) => {
             const steps = parseSteps(article.action_steps);
@@ -138,6 +147,7 @@ const Digest = () => {
             );
           })}
         </div>
+      </>
       )}
     </div>
   );

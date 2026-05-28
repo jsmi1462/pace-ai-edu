@@ -11,27 +11,42 @@ router.get('/me', async (req, res) => {
   const email = req.user;
   
   try {
-    const query = `
-      SELECT 
-        a.title, 
-        a.source, 
-        a.url, 
+    const articleQuery = `
+      SELECT
+        a.title,
+        a.source,
+        a.url,
         a.authors,
         a.publication_date,
-        tam.summary, 
-        tam.action_steps, 
-        tam.mission_alignment, 
+        tam.summary,
+        tam.action_steps,
+        tam.mission_alignment,
         tam.similarity_score,
-        tam.date_evaluated
+        tam.date_evaluated,
+        tam.status
       FROM teacher_article_matches tam
       JOIN articles a ON tam.article_id = a.id
-      WHERE tam.teacher_email = $1 
+      WHERE tam.teacher_email = $1
         AND tam.decision = 'Yes'
-      ORDER BY tam.date_evaluated DESC, tam.similarity_score DESC
+        AND tam.status IN ('pending', 'sent')
+      ORDER BY tam.status ASC, tam.similarity_score DESC, tam.date_evaluated DESC
       LIMIT 10;
     `;
-    const result = await pool.query(query, [email]);
-    res.json(result.rows);
+    const result = await pool.query(articleQuery, [email]);
+
+    const pending = result.rows.filter(r => r.status === 'pending');
+    const fresh = pending.length > 0;
+    const articles = fresh ? pending : result.rows;
+
+    if (fresh) {
+      await pool.query(
+        `UPDATE teacher_article_matches SET status = 'sent'
+         WHERE teacher_email = $1 AND decision = 'Yes' AND status = 'pending'`,
+        [email]
+      );
+    }
+
+    res.json({ articles, fresh });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Database error' });
