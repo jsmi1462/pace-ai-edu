@@ -4,7 +4,7 @@ INSERT INTO faculty_profiles (
     email, first_name, last_name, discipline, grade_band, years_experience, current_module, tailoring_query
 ) VALUES 
 (
-    'novice-math@paceacademy.edu', 
+    'novice-math@paceacademy.org', 
     'Sarah', 
     'Miller', 
     '6th Grade Math', 
@@ -14,7 +14,7 @@ INSERT INTO faculty_profiles (
     'I struggle with keeping students focused during direct instruction. Looking for active learning tips.'
 ),
 (
-    'mid-english@paceacademy.edu', 
+    'mid-english@paceacademy.org', 
     'David', 
     'Thompson', 
     '10th Grade English', 
@@ -24,7 +24,7 @@ INSERT INTO faculty_profiles (
     'Interested in strategies for improving student writing voice and peer review efficacy.'
 ),
 (
-    'veteran-history@paceacademy.edu', 
+    'veteran-history@paceacademy.org', 
     'Eleanor', 
     'Rigby', 
     'AP US History', 

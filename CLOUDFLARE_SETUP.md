@@ -21,7 +21,7 @@ https://random-words.trycloudflare.com
 
 ## Named Tunnel with Custom Domain (permanent URL + Zero Trust email gate)
 
-Use this if you later want a stable URL and to restrict access to `@paceacademy.edu`.
+Use this if you later want a stable URL and to restrict access to `@paceacademy.org`.
 
 **Prerequisites:** A domain added to Cloudflare DNS (cheapest: ~$1-2/yr `.xyz` from Namecheap).
 
@@ -56,4 +56,4 @@ cloudflared tunnel run --token "$CLOUDFLARE_TUNNEL_TOKEN" &
 
 **Zero Trust email policy** (Cloudflare dashboard):
 1. Access → Applications → Add Self-hosted → `pace.yourdomain.com`
-2. Policy: Allow — Emails ending in `@paceacademy.edu`
+2. Policy: Allow — Emails ending in `@paceacademy.org`

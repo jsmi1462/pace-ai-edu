@@ -2,7 +2,7 @@
 WorkflowManager: orchestrates the full pipeline for one run.
 
 Usage:
-    python -m pipeline.workflow [--teacher email@paceacademy.edu] [--dry-run]
+    python -m pipeline.workflow [--teacher email@paceacademy.org] [--dry-run]
 """
 
 import json as _json

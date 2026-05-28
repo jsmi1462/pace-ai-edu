@@ -24,7 +24,7 @@ and self-described **tailoring query**.
 | LLM provider | Local LM Studio / MLX on Mac Mini (zero-cost) | Gemini |
 | Article sources (v1) | RSS scraping — Cult of Pedagogy, Edutopia, ASCD | Gemini |
 | Delivery mechanism | React dashboard + optional email | Gemini |
-| Auth | Cloudflare Zero Trust → `@paceacademy.edu` only | Gemini |
+| Auth | Cloudflare Zero Trust → `@paceacademy.org` only | Gemini |
 | Compute | M4 Mac Mini (48GB) on-premises via Tailscale + Cloudflare Tunnel | Gemini |
 | Output format | 2-sentence summary + 3 steps + mission alignment | Gemini |
 | Personalization signals | Discipline, current module, years experience, tailoring query | Gemini |
@@ -145,7 +145,7 @@ Every article evaluation call returns a single JSON object:
 | 1.5 | Express API scaffold: `GET /profile`, `POST /profile`, `GET /digest/:email` | **Gemini** | ✅ |
 | 1.6 | CF header auth middleware (`req.user = req.headers['cf-access-authenticated-user-email']`) | **Gemini** | ✅ |
 | 1.7 | React app scaffold: Profile Setup page + Digest Dashboard page | **Gemini** | ✅ |
-| 1.8 | Vercel deploy + Cloudflare Zero Trust policy for `@paceacademy.edu` | **Gemini** | ☐ |
+| 1.8 | Vercel deploy + Cloudflare Zero Trust policy for `@paceacademy.org` | **Gemini** | ☐ |
 | 1.9 | Cloudflare Tunnel on Mac Mini → Express API | **Gemini** | ☐ |
 
 ---

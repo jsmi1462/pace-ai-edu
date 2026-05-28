@@ -11,7 +11,7 @@ Deploy a functional, zero-cost, localized AI pipeline within 48 hours to serve a
 ### 1. Infrastructure & Network Topology
 
 * **Frontend Edge:** React Single Page Application deployed via Vercel.
-* **Identity & Security:** Cloudflare Zero Trust Access. Authentication is restricted to `@paceacademy.edu` via email verification.
+* **Identity & Security:** Cloudflare Zero Trust Access. Authentication is restricted to `@paceacademy.org` via email verification.
 * **Secure Routing:** Cloudflare Tunnel (`cloudflared`) mapping the public Vercel requests to the local network without inbound port configuration.
 * **On-Premises Hardware:** M4 Mac Mini (48GB Unified Memory) accessed remotely via Tailscale.
 * **Backend Services:** Node.js Express API.
@@ -67,7 +67,7 @@ The core value relies on the LLM's system prompt dynamically adjusting based on 
 **Phase 2: Network & Access Configuration**
 
 * Deploy React frontend to Vercel.
-* Establish Cloudflare Zero Trust policy for the `@paceacademy.edu` domain.
+* Establish Cloudflare Zero Trust policy for the `@paceacademy.org` domain.
 * Initialize Cloudflare Tunnel locally to route Vercel API calls to the MacBook Pro backend.
 * Implement Express middleware to parse the `Cf-Access-Authenticated-User-Email` header.
 
