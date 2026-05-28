@@ -154,11 +154,11 @@ Every article evaluation call returns a single JSON object:
 
 | # | Task | Owner | Status |
 |---|---|---|---|
-| 2.1 | RSS fetcher (`feedparser`) for Edutopia, Cult of Pedagogy, ASCD | **Claude** | ☐ |
-| 2.2 | `newspaper3k` full-text scraper (strip boilerplate, extract core text) | **Claude** | ☐ |
-| 2.3 | Programmatic pre-filter (exclude op-eds, listicles, press releases) | **Claude** | ☐ |
-| 2.4 | Article embedder (call local LM Studio embedding endpoint → store in pgvector) | **Claude** | ☐ |
-| 2.5 | Teacher tailoring-string embedder + cosine similarity shortlist | **Claude** | ☐ |
+| 2.1 | RSS fetcher (`feedparser`) for Edutopia, Cult of Pedagogy, ASCD | **Claude** | ✅ |
+| 2.2 | `newspaper3k` full-text scraper (strip boilerplate, extract core text) | **Claude** | ✅ |
+| 2.3 | Programmatic pre-filter (exclude op-eds, listicles, press releases) | **Claude** | ✅ |
+| 2.4 | Article embedder (call local LM Studio embedding endpoint → store in pgvector) | **Claude** | ✅ |
+| 2.5 | Teacher tailoring-string embedder + cosine similarity shortlist | **Claude** | ✅ |
 
 ---
 
@@ -167,10 +167,10 @@ Every article evaluation call returns a single JSON object:
 | # | Task | Owner | Status |
 |---|---|---|---|
 | 3.1 | Master system prompt template (discipline + module + experience persona + mission) | **Gemini** | ✅ |
-| 3.2 | LLM call → parse + validate JSON output contract (above) | **Claude** | ☐ |
+| 3.2 | LLM call → parse + validate JSON output contract (above) | **Claude** | ✅ |
 | 3.3 | Per-teacher article selection: cull to top 3–5 by relevance score | **Gemini** | ✅ |
-| 3.4 | Healing pass: re-generate missing summaries/steps for existing DB records | **Claude** | ☐ |
-| 3.5 | `WorkflowManager.execute()` — orchestrates 2.x → 3.x pipeline end-to-end | **Claude** | ☐ |
+| 3.4 | Healing pass: re-generate missing summaries/steps for existing DB records | **Claude** | ✅ |
+| 3.5 | `WorkflowManager.execute()` — orchestrates 2.x → 3.x pipeline end-to-end | **Claude** | ✅ |
 
 ---
 
@@ -191,8 +191,8 @@ Every article evaluation call returns a single JSON object:
 |---|---|---|---|
 | 5.1 | `start.sh` — single command starts Postgres, Express, Python pipeline, LM Studio | **Gemini** | ✅ |
 | 5.2 | Seed 3 mock teacher personas for demo (novice math, mid-career English, veteran history) | **Gemini** | ✅ |
-| 5.3 | End-to-end smoke test: pipeline runs, DB populates, dashboard renders 3–5 articles | **Claude** | ☐ |
-| 5.4 | `--dry-run` flag: run pipeline without writing to DB or triggering LLM (for CI) | **Claude** | ☐ |
+| 5.3 | End-to-end smoke test: pipeline runs, DB populates, dashboard renders 3–5 articles | **Claude** | ✅ |
+| 5.4 | `--dry-run` flag: run pipeline without writing to DB or triggering LLM (for CI) | **Claude** | ✅ |
 
 ---
 

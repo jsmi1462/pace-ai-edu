@@ -102,35 +102,30 @@ def get_system_prompt(profile):
         "development, and a commitment to community."
     )
 
-    prompt = f"""You are an expert Pedagogical Consultant acting as a Translation Engine for {profile.get('first_name', 'a Pace Academy teacher')}.
-Your goal is to translate educational research into immediately applicable classroom strategies.
+    prompt = f"""You are a trusted mentor helping {profile.get('first_name', 'a teacher')} find research that's actually useful in their classroom.
+Translate the article below into practical, direct advice — not textbook language.
 
-### Teacher Context:
-- **Discipline:** {profile.get('discipline', 'General Education')}
-- **Grade Band:** {profile.get('grade_band', 'N/A')}
-- **Current Module/Unit:** {profile.get('current_module', 'N/A')}
-- **Experience Level:** {persona} (Emphasis: {emphasis})
-- **Tailoring Query:** {profile.get('tailoring_query', 'N/A')}
+### About this teacher:
+- Discipline: {profile.get('discipline', 'General Education')}
+- Grade Band: {profile.get('grade_band', 'N/A')}
+- Current Unit: {profile.get('current_module', 'N/A')}
+- Experience: {persona} — focus on {emphasis}
+- Looking for: {profile.get('tailoring_query', 'N/A')}
 
-### Strict Pedagogical Heuristic:
+### Evaluation criteria:
 {heuristic}
 
-### Institutional Alignment:
-All strategies must align with the Pace Academy Mission: "{mission}"
-
-### Your Task:
-Evaluate the provided article against the Strict Pedagogical Heuristic.
-If it passes, return a JSON object with the following fields:
+### Task:
+Evaluate the article. If it passes, return a JSON object with:
 
 1. "decision": "Yes"
-2. "summary": A two-sentence summary of the core concept.
-3. "action_steps": A list of exactly THREE actionable classroom steps they can take tomorrow.
-4. "mission_alignment": One sentence connecting the research to the Pace Academy mission.
+2. "summary": 2 sentences. Plain English. What's the key idea and why does it matter?
+3. "action_steps": A list of exactly 3 classroom tips. Write like a colleague giving quick, direct advice — start each with a verb, keep each to 1-2 sentences, no numbers or bullets in the text, no jargon.
+4. "mission_alignment": One natural sentence connecting this to Pace students. Do NOT quote or echo the mission statement — just say it plainly.
 
-If it fails the heuristic, return:
-{{"decision": "No", "reason": "Brief explanation of which heuristic point failed."}}
+If it fails, return:
+{{"decision": "No", "reason": "Brief explanation of which criterion it failed."}}
 
-### Output Format:
 Return ONLY a valid JSON object. No preamble or postscript."""
 
     return prompt

@@ -1,53 +1,57 @@
 #!/bin/bash
 
 # Pace AI Edu - Start Script
-echo "🚀 Starting Pace Academy Educational Digest Pipeline..."
+echo "Starting Pace Academy Educational Digest..."
 
-# 1. Load Environment Variables
+# Load environment variables
 if [ -f .env ]; then
-  export $(cat .env | xargs)
+  set -a; source .env; set +a
 else
-  echo "⚠️ .env file not found. Please create one from .env.example"
+  echo "ERROR: .env file not found. Copy .env.example and fill in values."
   exit 1
 fi
 
-# 2. Check for Postgres (Assuming it's installed via Homebrew or similar)
-if command -v pg_ctl >/dev/null 2>&1; then
-  echo "🐘 Checking PostgreSQL status..."
-  pg_ctl status >/dev/null 2>&1 || pg_ctl start
+# Build frontend (skipped in dev mode: START_MODE=dev)
+if [ "${START_MODE}" != "dev" ]; then
+  echo "Building frontend..."
+  (cd frontend && npm install --silent && npm run build)
 else
-  echo "⚠️ pg_ctl not found. Ensure PostgreSQL is running manually."
+  echo "Dev mode: skipping frontend build. Run 'cd frontend && npm run dev' separately."
 fi
 
-# 3. Start Express Backend
-echo "🌐 Starting Express API..."
+# Check PostgreSQL
+if command -v pg_ctl >/dev/null 2>&1; then
+  pg_ctl status >/dev/null 2>&1 || pg_ctl start
+else
+  echo "WARNING: pg_ctl not found. Ensure PostgreSQL is running."
+fi
+
+# Install backend deps if needed
+(cd backend && npm install --silent)
+
+# Start Express backend (serves API + built frontend)
+echo "Starting Express API on port ${PORT:-3001}..."
 cd backend
 npm start &
 BACKEND_PID=$!
 cd ..
 
-# 4. Start Python Pipeline (Task 3.5 WorkflowManager)
-# This part is usually triggered or run as a one-off, but we can start it in the background if it has a watch mode or similar.
-# For the demo, we might just run it once.
-echo "🐍 Running Python Pipeline Workflow..."
-# python3 pipeline/workflow.py --demo-mode
-
-# 5. Cloudflare Tunnel
+# Start Cloudflare Tunnel
 if [ -n "$CLOUDFLARE_TUNNEL_TOKEN" ]; then
-  echo "☁️ Starting Cloudflare Tunnel..."
+  echo "Starting Cloudflare Tunnel..."
   cloudflared tunnel run --token "$CLOUDFLARE_TUNNEL_TOKEN" &
   TUNNEL_PID=$!
 else
-  echo "⚠️ CLOUDFLARE_TUNNEL_TOKEN not set. Skipping tunnel."
+  echo "WARNING: CLOUDFLARE_TUNNEL_TOKEN not set. Remote access will not be available."
+  echo "  Run 'cloudflared tunnel login' then follow CLOUDFLARE_SETUP.md to configure."
 fi
 
-# 6. LM Studio / MLX
-echo "🤖 Ensure LM Studio is running on $LLM_BASE_URL"
+echo ""
+echo "Ready."
+echo "  Local:  http://localhost:${PORT:-3001}"
+if [ -n "$APP_URL" ]; then
+  echo "  Remote: $APP_URL"
+fi
 
-echo "✅ System initialized."
-echo "   - Backend: http://localhost:3001"
-echo "   - Frontend: http://localhost:5173 (run 'cd frontend && npm run dev' separately)"
-
-# Wait for background processes
 wait $BACKEND_PID
 if [ -n "$TUNNEL_PID" ]; then wait $TUNNEL_PID; fi
