@@ -6,7 +6,6 @@ const Digest = () => {
   const [articles, setArticles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
-  const userEmail = 'test-teacher@paceacademy.edu'; // Placeholder, should come from auth
 
   useEffect(() => {
     fetchDigest();
@@ -15,7 +14,7 @@ const Digest = () => {
   const fetchDigest = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(`/api/digest/${userEmail}`);
+      const response = await axios.get(`/api/digest/me`);
       setArticles(response.data);
     } catch (err) {
       console.error("Error fetching digest:", err);
@@ -77,7 +76,11 @@ const Digest = () => {
                   </a>
                 </div>
                 
-                <h2 className="text-2xl font-bold text-slate-800 mb-3">{article.title}</h2>
+                <h2 className="text-2xl font-bold text-slate-800 mb-1">{article.title}</h2>
+                <p className="text-sm text-slate-500 mb-4">
+                  {article.authors ? `${article.authors} • ` : ''}
+                  {article.publication_date ? new Date(article.publication_date).toLocaleDateString() : 'Recent Research'}
+                </p>
                 
                 <div className="flex items-start gap-3 mb-6">
                   <div className="mt-1 text-indigo-500"><Lightbulb size={20} /></div>

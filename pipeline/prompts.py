@@ -1,3 +1,51 @@
+def get_discipline_key(discipline_str: str) -> str | None:
+    """
+    Maps a free-text discipline string (e.g. '6th Grade Math') to 
+    an ERIC discipline key (e.g. 'ms_math').
+    """
+    d = discipline_str.lower()
+    
+    # Lower School
+    if "elementary" in d or "lower school" in d or "k-5" in d:
+        if "math" in d: return "ls_math"
+        if "science" in d: return "ls_science"
+        if "art" in d: return "ls_arts"
+        if "music" in d: return "ls_arts"
+        if "pe" in d or "phys" in d: return "ls_pe"
+        if "steam" in d: return "ls_steam"
+        if "library" in d: return "ls_library"
+        if "support" in d or "learning" in d: return "ls_learning_support"
+        return "ls_homeroom"
+
+    # Middle School
+    if "middle" in d or "6-8" in d or "6th" in d or "7th" in d or "8th" in d:
+        if "english" in d or "ela" in d or "reading" in d: return "ms_english"
+        if "math" in d: return "ms_math"
+        if "science" in d: return "ms_science"
+        if "history" in d or "social studies" in d: return "ms_history"
+        if "world language" in d or "spanish" in d or "french" in d: return "ms_world_language"
+        if "pe" in d or "phys" in d: return "ms_pe"
+        if "steam" in d or "robotics" in d: return "ms_steam"
+        if "art" in d: return "ms_arts"
+        if "debate" in d: return "ms_debate"
+
+    # Upper School / Default
+    if "english" in d: return "us_english"
+    if "math" in d or "calc" in d or "algebra" in d: return "us_math"
+    if "science" in d or "bio" in d or "chem" in d or "phys" in d: return "us_science"
+    if "history" in d or "social studies" in d or "civics" in d: return "us_history"
+    if "world language" in d or "spanish" in d or "french" in d or "latin" in d: return "us_world_language"
+    if "computer" in d or "cs" in d or "programming" in d: return "us_cs"
+    if "art" in d: return "us_arts"
+    if "economics" in d or "psych" in d or "social science" in d: return "us_social_science"
+    if "support" in d or "learning" in d: return "us_learning_support"
+    
+    if "global" in d or "leadership" in d: return "global_leadership"
+    if "counseling" in d or "sel" in d: return "counseling"
+
+    return None
+
+
 def get_search_keyword_prompt(profile):
     """
     Generates a prompt to extract search keywords from a teacher profile.

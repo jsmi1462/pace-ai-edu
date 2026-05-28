@@ -15,10 +15,11 @@ from pipeline.config import CONFIG
 from pipeline.database import DatabaseManager, get_db_connection
 
 EXAMPLE_CSV = """\
-email,first_name,last_name,discipline,grade_band,years_experience,current_module,tailoring_query
-jane.doe@paceacademy.edu,Jane,Doe,AP Chemistry,9-12,12,Thermodynamics,I want to improve inquiry-based lab design and help advanced students connect chemistry to real-world applications
-mark.chen@paceacademy.edu,Mark,Chen,7th Grade English,6-8,3,Narrative Writing,I struggle with keeping students engaged during the drafting phase and want better peer-editing strategies
-sarah.james@paceacademy.edu,Sarah,James,Elementary Math,K-5,7,Fractions,I want differentiation strategies for a wide ability range in the same classroom
+email,first_name,last_name,discipline,grade_band,years_experience,current_module,tailoring_query,discipline_key
+jane.doe@paceacademy.edu,Jane,Doe,AP Chemistry,9-12,12,Thermodynamics,I want to improve inquiry-based lab design and help advanced students connect chemistry to real-world applications,us_science
+mark.chen@paceacademy.edu,Mark,Chen,7th Grade English,6-8,3,Narrative Writing,I struggle with keeping students engaged during the drafting phase and want better peer-editing strategies,ms_english
+sarah.james@paceacademy.edu,Sarah,James,Elementary Math,K-5,7,Fractions,I want differentiation strategies for a wide ability range in the same classroom,ls_math
+novice-math@paceacademy.edu,Jordan,Rivera,6th Grade Math,6-8,2,Fractions and Ratios,I struggle with engagement during independent practice and supporting struggling learners without slowing the class,ms_math
 """
 
 def main():

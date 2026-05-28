@@ -2,6 +2,9 @@
 ERIC API fetcher — Education Resources Information Center.
 Free, no API key, 2M+ peer-reviewed education articles.
 API docs: https://api.ies.ed.gov/eric/
+
+Articles are fetched per discipline using targeted queries and cached
+per-discipline in .eric_cache.json (24-hour TTL).
 """
 
 import hashlib
@@ -15,10 +18,52 @@ import requests
 
 from ..config import CONFIG
 
-_CACHE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".eric_cache.json")
+_CACHE_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    ".eric_cache.json"
+)
 _CACHE_TTL_HOURS = 24
 
 ERIC_API_URL = "https://api.ies.ed.gov/eric/"
+
+# Targeted ERIC query per Pace Academy discipline key.
+# Each query is tuned to return peer-reviewed literature directly relevant
+# to that discipline's teaching practice.
+DISCIPLINE_ERIC_QUERIES: dict[str, str] = {
+    # Lower School
+    "ls_homeroom":        "elementary K-5 literacy reading writing mathematics integrated classroom instruction",
+    "ls_math":            "elementary school mathematics number sense operations problem solving K-5",
+    "ls_science":         "elementary science inquiry hands-on STEM primary school",
+    "ls_steam":           "elementary STEAM design thinking maker technology engineering primary school",
+    "ls_world_language":  "elementary Spanish world language acquisition second language young learners",
+    "ls_arts":            "elementary visual arts music arts integration primary school",
+    "ls_pe":              "elementary physical education movement health wellness fitness K-5",
+    "ls_library":         "school library information literacy research skills elementary",
+    "ls_learning_support":"elementary reading intervention learning disabilities dyslexia support specialist",
+    # Middle School
+    "ms_english":         "middle school English language arts literacy writing reading grades 6 7 8",
+    "ms_math":            "middle school mathematics algebra fractions ratios geometry problem solving grades 6 7 8",
+    "ms_science":         "middle school science life earth physical inquiry laboratory grades 6 7 8",
+    "ms_history":         "middle school social studies history civics geography adolescent",
+    "ms_world_language":  "middle school world language French Spanish Latin acquisition adolescent",
+    "ms_pe":              "middle school physical education adolescent health wellness fitness",
+    "ms_steam":           "middle school STEAM robotics engineering programming coding design",
+    "ms_arts":            "middle school visual arts music band chorus performance arts education",
+    "ms_debate":          "middle school debate argumentation critical thinking public speaking rhetoric",
+    # Upper School
+    "us_english":         "high school English literature composition AP writing rhetoric analysis",
+    "us_math":            "high school mathematics calculus statistics precalculus AP algebra",
+    "us_science":         "high school science biology chemistry physics AP laboratory inquiry",
+    "us_history":         "high school history social studies AP United States world European",
+    "us_world_language":  "high school world language Spanish French Latin AP acquisition fluency",
+    "us_cs":              "high school computer science programming AP algorithms robotics data structures",
+    "us_arts":            "high school visual arts performing theater music studio AP",
+    "us_social_science":  "high school economics psychology sociology debate elective social science",
+    "us_learning_support":"high school academic support learning differences study skills college preparation",
+    # Cross-division
+    "global_leadership":  "global education international competency cross-cultural service learning",
+    "counseling":         "school counseling social emotional learning adolescent mental health SEL",
+}
 
 # Publication types worth keeping (peer-reviewed research and practitioner reports)
 GOOD_PUB_TYPES = {
@@ -29,32 +74,6 @@ GOOD_PUB_TYPES = {
     "dissertations/theses",
     "information analyses",
 }
-
-# Broad topic queries that sweep up the full range of K-12 teaching practice.
-# These are intentionally general — per-teacher relevance is handled downstream
-# by embeddings + LLM evaluation.
-ERIC_BASE_QUERIES = [
-    "classroom instruction teaching strategies",
-    "student engagement learning outcomes",
-    "formative assessment feedback students",
-    "differentiated instruction diverse learners",
-    "project-based learning inquiry",
-    "literacy reading writing instruction",
-    "mathematics instruction problem solving",
-    "science inquiry STEM teaching",
-    "social-emotional learning classroom",
-    "teacher professional development practice",
-    "high school secondary curriculum",
-    "middle school adolescent learning",
-    "elementary school early childhood",
-    "discussion-based learning Socratic",
-    "metacognition student learning strategies",
-    "cooperative learning peer collaboration",
-    "growth mindset motivation students",
-    "culturally responsive teaching",
-    "technology integration digital learning",
-    "restorative practices classroom management",
-]
 
 
 def _parse_date(year_str) -> date | None:
@@ -72,103 +91,78 @@ def _is_recent(pub_date: date | None, max_age_days: int) -> bool:
     return (date.today() - pub_date).days <= max_age_days
 
 
-def fetch_eric_articles(
-    max_per_query: int = 200,
-    max_age_days: int = None,
-) -> list[dict]:
-    """
-    Runs all ERIC_BASE_QUERIES and returns a deduplicated list of article dicts.
-    Results are cached to .eric_cache.json for _CACHE_TTL_HOURS to avoid re-fetching on restarts.
-    """
-    if max_age_days is None:
-        max_age_days = CONFIG.MAX_ARTICLE_AGE_DAYS
-
-    # Return cached results if fresh
-    if os.path.exists(_CACHE_PATH):
-        try:
-            with open(_CACHE_PATH) as f:
-                cached = json.load(f)
-            age_hours = (time.time() - cached["timestamp"]) / 3600
-            if age_hours < _CACHE_TTL_HOURS:
-                articles = cached["articles"]
-                # Restore date objects
-                for a in articles:
-                    if a.get("publication_date"):
-                        a["publication_date"] = date.fromisoformat(a["publication_date"])
-                logging.info(f"ERIC cache hit ({age_hours:.1f}h old): {len(articles)} articles.")
-                return articles
-        except Exception:
-            pass  # corrupt cache — re-fetch
-
-    seen_ids: set[str] = set()
-    all_articles: list[dict] = []
-
-    for query in ERIC_BASE_QUERIES:
-        try:
-            articles = _fetch_query(query, max_per_query, max_age_days, seen_ids)
-            all_articles.extend(articles)
-            logging.info(f"ERIC query '{query[:40]}...' → {len(articles)} articles")
-            time.sleep(0.5)  # polite rate limiting
-        except Exception as e:
-            logging.error(f"ERIC fetch failed for query '{query}': {e}", exc_info=True)
-
-    logging.info(f"ERIC total: {len(all_articles)} unique articles across {len(ERIC_BASE_QUERIES)} queries.")
-
-    # Write cache (serialize date objects to strings)
+def _load_cache() -> dict:
+    if not os.path.exists(_CACHE_PATH):
+        return {}
     try:
-        serializable = []
-        for a in all_articles:
-            row = dict(a)
-            if isinstance(row.get("publication_date"), date):
-                row["publication_date"] = row["publication_date"].isoformat()
-            serializable.append(row)
+        with open(_CACHE_PATH) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _save_cache(cache: dict) -> None:
+    try:
         with open(_CACHE_PATH, "w") as f:
-            json.dump({"timestamp": time.time(), "articles": serializable}, f)
-        logging.info(f"ERIC cache written to {_CACHE_PATH}")
+            json.dump(cache, f)
     except Exception as e:
         logging.warning(f"ERIC cache write failed: {e}")
 
-    return all_articles
 
-
-def fetch_eric_for_teacher(
-    teacher: dict,
-    max_results: int = 100,
-    keywords: list[str] = None,
+def fetch_eric_for_discipline(
+    discipline_key: str,
+    max_results: int = None,
+    max_age_days: int = None,
 ) -> list[dict]:
     """
-    Fetches ERIC articles targeted to a single teacher.
-
-    If `keywords` is provided (generated by LLMEvaluator.generate_keywords),
-    they are used as the search query. Otherwise falls back to simple profile
-    field concatenation.
+    Returns articles for a single discipline key, using the per-discipline cache.
+    Fetches from ERIC API if cache is missing or stale.
     """
-    query = _build_teacher_query(teacher, keywords)
+    if max_results is None:
+        max_results = CONFIG.ERIC_MAX_PER_QUERY
+    if max_age_days is None:
+        max_age_days = CONFIG.MAX_ARTICLE_AGE_DAYS
+
+    query = DISCIPLINE_ERIC_QUERIES.get(discipline_key)
     if not query:
+        logging.warning(f"No ERIC query defined for discipline '{discipline_key}'")
         return []
 
-    seen: set[str] = set()
-    articles = _fetch_query(query, max_results, CONFIG.MAX_ARTICLE_AGE_DAYS, seen)
-    logging.info(
-        f"ERIC targeted ({teacher.get('email','?')}): "
-        f"query='{query[:60]}' → {len(articles)} articles"
-    )
+    cache = _load_cache()
+    entry = cache.get(discipline_key, {})
+    age_hours = (time.time() - entry.get("timestamp", 0)) / 3600
+
+    if entry and age_hours < _CACHE_TTL_HOURS:
+        articles = entry["articles"]
+        for a in articles:
+            if a.get("publication_date"):
+                a["publication_date"] = date.fromisoformat(a["publication_date"])
+        logging.info(f"ERIC cache hit [{discipline_key}] ({age_hours:.1f}h old): {len(articles)} articles.")
+        return articles
+
+    logging.info(f"ERIC fetching [{discipline_key}]: '{query[:60]}...'")
+    seen_ids: set[str] = set()
+    try:
+        articles = _fetch_query(query, max_results, max_age_days, seen_ids)
+        time.sleep(0.5)
+    except Exception as e:
+        logging.error(f"ERIC fetch failed [{discipline_key}]: {e}")
+        articles = []
+
+    logging.info(f"ERIC [{discipline_key}]: {len(articles)} articles")
+
+    # Serialize dates for JSON, write to per-discipline cache entry
+    serializable = []
+    for a in articles:
+        row = dict(a)
+        if isinstance(row.get("publication_date"), date):
+            row["publication_date"] = row["publication_date"].isoformat()
+        serializable.append(row)
+
+    cache[discipline_key] = {"timestamp": time.time(), "articles": serializable}
+    _save_cache(cache)
+
     return articles
-
-
-def _build_teacher_query(teacher: dict, keywords: list[str] = None) -> str:
-    """Returns an ERIC search string from LLM-generated keywords or profile fields."""
-    if keywords:
-        return " ".join(keywords)
-
-    # Fallback: concatenate key profile fields
-    parts = [
-        teacher.get('discipline', ''),
-        teacher.get('current_module', ''),
-        ' '.join(teacher.get('tailoring_query', '').split()[:8]),
-    ]
-    return ' '.join(p for p in parts if p)
-
 
 def _fetch_query(
     query: str,
@@ -206,7 +200,6 @@ def _fetch_query(
             if not eric_id or eric_id in seen_ids:
                 continue
 
-            # Filter by publication type
             pub_types = [pt.lower() for pt in (doc.get("publicationtype") or [])]
             if pub_types and not any(gt in pub_types for gt in GOOD_PUB_TYPES):
                 continue
@@ -215,19 +208,13 @@ def _fetch_query(
             if not _is_recent(pub_date, max_age_days):
                 continue
 
-            # Skip articles with no abstract
             abstract = (doc.get("description") or "").strip()
             if len(abstract) < 100:
                 continue
 
             seen_ids.add(eric_id)
-
-            # Build URL — ERIC links are predictable
             url = doc.get("url") or f"https://eric.ed.gov/?id={eric_id}"
-
-            # Stable source_id
             source_id = hashlib.sha256(eric_id.encode()).hexdigest()[:32]
-
             authors = doc.get("author") or []
             authors_str = ", ".join(authors) if isinstance(authors, list) else str(authors)
 
@@ -239,11 +226,6 @@ def _fetch_query(
                 "authors":          authors_str,
                 "publication_date": pub_date,
                 "url":              url,
-                "_eric_id":         eric_id,
-                "_pub_types":       pub_types,
-                "_subjects":        doc.get("subject") or [],
-                "_edu_levels":      doc.get("educationlevel") or [],
-                "_journal":         doc.get("source") or "",
             })
 
             if len(articles) >= max_results:

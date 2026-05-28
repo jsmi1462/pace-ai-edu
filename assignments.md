@@ -236,6 +236,54 @@ pace-ai-edu/
 
 ---
 
+---
+
+## Gemini — New Tasks (Discipline-Key Refactor)
+
+These are blocking for a complete product. Claude has shipped the Python side.
+
+| # | Task | Detail |
+|---|---|---|
+| G1 | Add `discipline_key` to Express `POST /profile` | Save to `faculty_profiles.discipline_key` column (already exists in DB) |
+| G2 | Add `discipline_key` dropdown to React Profile Setup page | Options must come from the list below. Label the field "Teaching Discipline". |
+| G3 | Return `discipline_key` in Express `GET /profile` response | Frontend needs it to show the current selection |
+
+**Discipline key options for the dropdown** (value → display label):
+
+```
+ls_homeroom       → Lower School: Homeroom / Lead Teacher
+ls_math           → Lower School: Math
+ls_science        → Lower School: Science
+ls_steam          → Lower School: STEAM
+ls_world_language → Lower School: World Language
+ls_arts           → Lower School: Arts & Music
+ls_pe             → Lower School: Physical Education
+ls_library        → Lower School: Library
+ls_learning_support → Lower School: Learning Support
+ms_english        → Middle School: English
+ms_math           → Middle School: Math
+ms_science        → Middle School: Science
+ms_history        → Middle School: History & Social Studies
+ms_world_language → Middle School: World Language
+ms_pe             → Middle School: Physical Education
+ms_steam          → Middle School: STEAM
+ms_arts           → Middle School: Arts & Music
+ms_debate         → Middle School: Debate
+us_english        → Upper School: English
+us_math           → Upper School: Math
+us_science        → Upper School: Science
+us_history        → Upper School: History & Social Studies
+us_world_language → Upper School: World Language
+us_cs             → Upper School: Computer Science
+us_arts           → Upper School: Arts & Performing Arts
+us_social_science → Upper School: Economics / Psychology / Social Sciences
+us_learning_support → Upper School: Learning Support
+global_leadership → Cross-Division: Global Leadership
+counseling        → Cross-Division: Counseling & SEL
+```
+
+---
+
 ## Interface Contract Between Claude & Gemini
 
 The Python pipeline writes to PostgreSQL. The Express API reads from it. The handoff:

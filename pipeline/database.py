@@ -50,11 +50,14 @@ class DatabaseManager:
                 years_experience    INT NOT NULL DEFAULT 0,
                 current_module      TEXT,
                 tailoring_query     TEXT,
+                discipline_key      TEXT,
                 is_active           BOOLEAN DEFAULT TRUE,
                 created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """,
+            # Migrate existing faculty_profiles tables that predate discipline_key
+            "ALTER TABLE faculty_profiles ADD COLUMN IF NOT EXISTS discipline_key TEXT",
             """
             CREATE TABLE IF NOT EXISTS articles (
                 id                  SERIAL PRIMARY KEY,
@@ -68,6 +71,14 @@ class DatabaseManager:
                 created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """,
+            """
+            CREATE TABLE IF NOT EXISTS article_disciplines (
+                article_id          INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+                discipline_key      TEXT NOT NULL,
+                PRIMARY KEY (article_id, discipline_key)
+            )
+            """,
+            "CREATE INDEX IF NOT EXISTS idx_article_disciplines_key ON article_disciplines(discipline_key)",
             """
             CREATE TABLE IF NOT EXISTS teacher_article_matches (
                 id                  SERIAL PRIMARY KEY,
@@ -98,6 +109,34 @@ class DatabaseManager:
             self.conn.rollback()
             raise
 
+    def backfill_general_tags(self) -> int:
+        """
+        Tags all existing articles that have no discipline tag yet as 'general'
+        so they're reachable by vector search until the discipline-specific
+        ERIC fetch repopulates the DB.
+        """
+        q = """
+            INSERT INTO article_disciplines (article_id, discipline_key)
+            SELECT a.id, 'general'
+            FROM articles a
+            WHERE NOT EXISTS (
+                SELECT 1 FROM article_disciplines ad WHERE ad.article_id = a.id
+            )
+            ON CONFLICT DO NOTHING;
+        """
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(q)
+                count = cur.rowcount
+            self.conn.commit()
+            if count:
+                logging.info(f"Backfilled {count} legacy articles with 'general' discipline tag.")
+            return count
+        except Exception as e:
+            logging.warning(f"backfill_general_tags failed: {e}")
+            self.conn.rollback()
+            return 0
+
     # ------------------------------------------------------------------
     # Faculty profiles
     # ------------------------------------------------------------------
@@ -106,20 +145,21 @@ class DatabaseManager:
         q = """
             INSERT INTO faculty_profiles
                 (email, first_name, last_name, discipline, grade_band,
-                 years_experience, current_module, tailoring_query)
+                 years_experience, current_module, tailoring_query, discipline_key)
             VALUES
                 (%(email)s, %(first_name)s, %(last_name)s, %(discipline)s,
                  %(grade_band)s, %(years_experience)s, %(current_module)s,
-                 %(tailoring_query)s)
+                 %(tailoring_query)s, %(discipline_key)s)
             ON CONFLICT (email) DO UPDATE SET
-                first_name      = EXCLUDED.first_name,
-                last_name       = EXCLUDED.last_name,
-                discipline      = EXCLUDED.discipline,
-                grade_band      = EXCLUDED.grade_band,
+                first_name       = EXCLUDED.first_name,
+                last_name        = EXCLUDED.last_name,
+                discipline       = EXCLUDED.discipline,
+                grade_band       = EXCLUDED.grade_band,
                 years_experience = EXCLUDED.years_experience,
-                current_module  = EXCLUDED.current_module,
-                tailoring_query = EXCLUDED.tailoring_query,
-                updated_at      = CURRENT_TIMESTAMP;
+                current_module   = EXCLUDED.current_module,
+                tailoring_query  = EXCLUDED.tailoring_query,
+                discipline_key   = EXCLUDED.discipline_key,
+                updated_at       = CURRENT_TIMESTAMP;
         """
         try:
             with self.conn.cursor() as cur:
@@ -132,6 +172,7 @@ class DatabaseManager:
                     "years_experience": int(profile.get("years_experience", 0)),
                     "current_module":   profile.get("current_module", ""),
                     "tailoring_query":  profile.get("tailoring_query", ""),
+                    "discipline_key":   profile.get("discipline_key"),
                 })
             self.conn.commit()
         except Exception as e:
@@ -198,6 +239,74 @@ class DatabaseManager:
         except Exception as e:
             logging.warning(f"Failed to store embedding for article {article_id}: {e}")
             self.conn.rollback()
+
+    def tag_article_discipline(self, article_id: int, discipline_key: str) -> None:
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO article_disciplines (article_id, discipline_key) "
+                    "VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                    (article_id, discipline_key),
+                )
+            self.conn.commit()
+        except Exception as e:
+            logging.warning(f"tag_article_discipline failed ({article_id}, {discipline_key}): {e}")
+            self.conn.rollback()
+
+    def search_articles_by_vector(
+        self,
+        discipline_key: str | None,
+        query_embedding: list[float],
+        limit: int = 50,
+    ) -> list[dict]:
+        """
+        Returns the top `limit` articles ordered by cosine distance to query_embedding,
+        filtered to the teacher's discipline pool plus 'general' (RSS articles).
+        Falls back to searching all tagged articles if discipline_key is None.
+        """
+        vec = '[' + ','.join(f'{x:.8f}' for x in query_embedding) + ']'
+
+        if discipline_key:
+            discipline_filter = "ad.discipline_key IN %s"
+            discipline_params = ((discipline_key, 'general'),)
+        else:
+            discipline_filter = "TRUE"
+            discipline_params = ()
+
+        q = f"""
+            SELECT DISTINCT ON (a.id)
+                a.id, a.source_id, a.source, a.title, a.full_text,
+                a.authors, a.publication_date, a.url,
+                (a.embedding <=> %s::vector) AS distance
+            FROM articles a
+            JOIN article_disciplines ad ON a.id = ad.article_id
+            WHERE {discipline_filter}
+              AND a.embedding IS NOT NULL
+            ORDER BY a.id, distance ASC
+            LIMIT %s;
+        """
+        try:
+            with self.conn.cursor(cursor_factory=DictCursor) as cur:
+                cur.execute(q, (vec,) + discipline_params + (limit,))
+                rows = cur.fetchall()
+            results = []
+            for row in rows:
+                d = dict(row)
+                d['_db_id'] = d['id']
+                d['_distance'] = d.pop('distance', 1.0)
+                results.append(d)
+            # Re-sort by distance ascending (DISTINCT ON ordering may vary)
+            results.sort(key=lambda r: r['_distance'])
+            return results
+        except Exception as e:
+            logging.warning(f"Vector search failed: {e}")
+            self.conn.rollback()
+            return []
+
+    def count_articles(self) -> int:
+        with self.conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM articles;")
+            return cur.fetchone()[0]
 
     def get_already_seen_source_ids(self, source_ids: list[str]) -> set[str]:
         if not source_ids:
