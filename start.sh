@@ -36,22 +36,19 @@ npm start &
 BACKEND_PID=$!
 cd ..
 
-# Start Cloudflare Tunnel
-if [ -n "$CLOUDFLARE_TUNNEL_TOKEN" ]; then
-  echo "Starting Cloudflare Tunnel..."
-  cloudflared tunnel run --token "$CLOUDFLARE_TUNNEL_TOKEN" &
+# Start Cloudflare Quick Tunnel
+if command -v cloudflared >/dev/null 2>&1; then
+  echo "Starting Cloudflare Quick Tunnel (URL will appear below)..."
+  cloudflared tunnel --url http://localhost:${PORT:-3001} 2>&1 | grep -E "trycloudflare|ERR" &
   TUNNEL_PID=$!
 else
-  echo "WARNING: CLOUDFLARE_TUNNEL_TOKEN not set. Remote access will not be available."
-  echo "  Run 'cloudflared tunnel login' then follow CLOUDFLARE_SETUP.md to configure."
+  echo "WARNING: cloudflared not installed. Run: brew install cloudflare/cloudflare/cloudflared"
 fi
 
 echo ""
 echo "Ready."
 echo "  Local:  http://localhost:${PORT:-3001}"
-if [ -n "$APP_URL" ]; then
-  echo "  Remote: $APP_URL"
-fi
+echo "  Remote: check above for the trycloudflare.com URL (takes ~10 seconds to appear)"
 
 wait $BACKEND_PID
 if [ -n "$TUNNEL_PID" ]; then wait $TUNNEL_PID; fi

@@ -1,107 +1,59 @@
-# Cloudflare Tunnel + Zero Trust Setup
+# Cloudflare Tunnel Setup
 
-This app uses Cloudflare Tunnel so the Mac Mini never needs an open firewall port.
-Cloudflare Zero Trust restricts access to `@paceacademy.edu` email addresses.
+## Quick Tunnel (no domain required — use this for the demo)
 
----
-
-## Prerequisites
-
-- A Cloudflare account (free tier works)
-- A domain managed by Cloudflare DNS (e.g. `yourdomain.com`)
-- `cloudflared` installed on the Mac Mini: `brew install cloudflare/cloudflare/cloudflared`
-
----
-
-## Step 1 — Login to Cloudflare
-
+Install cloudflared once:
 ```bash
-cloudflared tunnel login
+brew install cloudflare/cloudflare/cloudflared
 ```
 
-This opens a browser. Pick your domain. A cert is saved to `~/.cloudflared/cert.pem`.
-
----
-
-## Step 2 — Create the tunnel
-
-```bash
-cloudflared tunnel create pace-ai-edu
+That's it. `start.sh` launches the tunnel automatically and prints a public URL:
+```
+https://random-words.trycloudflare.com
 ```
 
-Note the tunnel ID printed (looks like `abc123de-...`). You'll use it below.
+**Notes:**
+- URL is public and works immediately — no account, no domain needed
+- URL changes every time you restart (fine for a live demo you control)
+- Auth uses `DEV_EMAIL` from `.env` — set it to a Pace teacher email so it looks real
 
 ---
 
-## Step 3 — Create the config file
+## Named Tunnel with Custom Domain (permanent URL + Zero Trust email gate)
+
+Use this if you later want a stable URL and to restrict access to `@paceacademy.edu`.
+
+**Prerequisites:** A domain added to Cloudflare DNS (cheapest: ~$1-2/yr `.xyz` from Namecheap).
+
+```bash
+cloudflared tunnel login                                          # browser auth
+cloudflared tunnel create pace-ai-edu                            # note the tunnel ID
+cloudflared tunnel route dns pace-ai-edu pace.yourdomain.com     # add CNAME
+cloudflared tunnel token pace-ai-edu                             # copy token
+```
 
 Create `~/.cloudflared/config.yml`:
-
 ```yaml
 tunnel: pace-ai-edu
-credentials-file: /Users/<your-user>/.cloudflared/<tunnel-id>.json
+credentials-file: /Users/<you>/.cloudflared/<tunnel-id>.json
 
 ingress:
-  - hostname: pace-ai-edu.yourdomain.com
+  - hostname: pace.yourdomain.com
     service: http://localhost:3001
   - service: http_status:404
 ```
 
-Replace `<your-user>`, `<tunnel-id>`, and `yourdomain.com` with real values.
-
----
-
-## Step 4 — Add DNS record
-
-```bash
-cloudflared tunnel route dns pace-ai-edu pace-ai-edu.yourdomain.com
+Add to `.env`:
+```
+CLOUDFLARE_TUNNEL_TOKEN=<token from above>
+NODE_ENV=production
 ```
 
-This creates a CNAME in your Cloudflare DNS automatically.
-
----
-
-## Step 5 — Get the tunnel token for .env
-
+Update `start.sh` tunnel block to use the named tunnel:
 ```bash
-cloudflared tunnel token pace-ai-edu
+cloudflared tunnel run --token "$CLOUDFLARE_TUNNEL_TOKEN" &
 ```
 
-Copy the output and paste it as `CLOUDFLARE_TUNNEL_TOKEN` in your `.env` file.
-
----
-
-## Step 6 — Set up Zero Trust access policy
-
-1. Go to [one.dash.cloudflare.com](https://one.dash.cloudflare.com) → **Access** → **Applications**
-2. Click **Add an Application** → **Self-hosted**
-3. Name: `Pace AI Edu`
-4. Subdomain: `pace-ai-edu`, Domain: `yourdomain.com`
-5. Under **Policies**, add a policy:
-   - Name: `Pace Academy Staff`
-   - Action: **Allow**
-   - Include rule: **Emails ending in** → `paceacademy.edu`
-6. Save.
-
-Now anyone hitting `pace-ai-edu.yourdomain.com` will be prompted to authenticate with their Pace email. The `Cf-Access-Authenticated-User-Email` header is automatically injected into every request — this is how the app knows who is logged in.
-
----
-
-## Step 7 — Run as a background service (optional, recommended)
-
-```bash
-sudo cloudflared service install
-sudo launchctl start com.cloudflare.cloudflared
-```
-
-This makes cloudflared start automatically on boot.
-
----
-
-## Testing
-
-```bash
-cloudflared tunnel run pace-ai-edu   # run manually first to verify
-```
-
-Visit `https://pace-ai-edu.yourdomain.com` — you should see the Cloudflare Access login page.
+**Zero Trust email policy** (Cloudflare dashboard):
+1. Access → Applications → Add Self-hosted → `pace.yourdomain.com`
+2. Policy: Allow — Emails ending in `@paceacademy.edu`

@@ -42,7 +42,7 @@ if [ ! -f .env ]; then
   echo ""
   echo "IMPORTANT: .env created from .env.example. Edit it now:"
   echo "  1. Set DATABASE_URL (check your PostgreSQL user/password)"
-  echo "  2. Set CLOUDFLARE_TUNNEL_TOKEN (see CLOUDFLARE_SETUP.md)"
+  echo "  2. Set DEV_EMAIL to the teacher email to use for the demo"
   echo "  3. Confirm LLM_BASE_URL matches your LM Studio port"
 else
   echo ".env already exists — skipping."
