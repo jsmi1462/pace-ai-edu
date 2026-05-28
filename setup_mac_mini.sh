@@ -21,6 +21,14 @@ if ! command -v brew >/dev/null 2>&1; then
   exit 1
 fi
 
+# Python 3.11 (3.10+ required for union type syntax)
+if ! command -v python3.11 >/dev/null 2>&1; then
+  echo "  Installing Python 3.11..."
+  brew install python@3.11
+  echo 'export PATH="/opt/homebrew/opt/python@3.11/bin:$PATH"' >> ~/.zprofile
+  export PATH="/opt/homebrew/opt/python@3.11/bin:$PATH"
+fi
+
 # Node.js
 if ! command -v node >/dev/null 2>&1; then
   echo "  Installing Node.js..."
@@ -54,7 +62,7 @@ echo "System dependencies ready."
 
 echo ""
 echo "Installing Python dependencies..."
-pip3 install -r requirements.txt --quiet
+python3.11 -m pip install -r requirements.txt --quiet
 
 # ── Node dependencies + frontend build ───────────────────────────────────────
 
@@ -93,7 +101,7 @@ read -p "Seed mock teachers and demo data? (y/n) " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
   psql -d pace_ai_edu -f seed_mock_data.sql
-  python3 seed_teachers.py
+  python3.11 seed_teachers.py
 fi
 
 # ── Environment file ──────────────────────────────────────────────────────────
