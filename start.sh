@@ -50,9 +50,9 @@ cd ..
 
 # Start Cloudflare Tunnel
 if command -v cloudflared >/dev/null 2>&1; then
-  if [ -n "$CLOUDFLARE_TUNNEL_TOKEN" ]; then
-    echo "Starting Cloudflare named tunnel..."
-    cloudflared tunnel run --token "$CLOUDFLARE_TUNNEL_TOKEN" &
+  if [ -f "$HOME/.cloudflared/config.yml" ]; then
+    echo "Starting Cloudflare named tunnel (pace-ai-edu)..."
+    cloudflared tunnel run pace-ai-edu &
     TUNNEL_PID=$!
   else
     echo "Starting Cloudflare Quick Tunnel (URL will appear below)..."
