@@ -31,11 +31,11 @@ else
   echo "WARNING: Python venv not found. Run: python3.13 -m venv venv && source venv/bin/activate && pip install -r requirements.txt"
 fi
 
-# Check PostgreSQL
-if command -v pg_ctl >/dev/null 2>&1; then
+# Ensure PostgreSQL is running
+if command -v brew >/dev/null 2>&1; then
+  brew services start postgresql@17 2>/dev/null || true
+elif command -v pg_ctl >/dev/null 2>&1 && [ -n "$PGDATA" ]; then
   pg_ctl status >/dev/null 2>&1 || pg_ctl start
-else
-  echo "WARNING: pg_ctl not found. Ensure PostgreSQL is running."
 fi
 
 # Install backend deps if needed

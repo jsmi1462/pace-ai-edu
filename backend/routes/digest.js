@@ -60,11 +60,13 @@ router.post('/regenerate', async (req, res) => {
   
   console.log(`Triggering pipeline for ${email}...`);
   
-  // Start the Python process
-  const pythonProcess = spawn('python3', [
-    '-m', 'pipeline.workflow', 
+  // Use venv python so all pipeline deps are available
+  const pythonBin = process.env.PYTHON_BIN || 'python3';
+  const cwd = require('path').join(__dirname, '..', '..');
+  const pythonProcess = spawn(pythonBin, [
+    '-m', 'pipeline.workflow',
     '--teacher', email
-  ]);
+  ], { cwd });
 
   let output = '';
   let error = '';

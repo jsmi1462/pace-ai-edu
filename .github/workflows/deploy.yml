@@ -1,0 +1,26 @@
+name: Deploy to Mac Mini
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Pull latest code
+        run: git -C ~/pace-ai-edu pull origin main
+
+      - name: Install backend dependencies
+        run: cd ~/pace-ai-edu/backend && npm install --silent
+
+      - name: Build frontend
+        run: cd ~/pace-ai-edu/frontend && npm install --silent && npm run build
+
+      - name: Restart service
+        run: |
+          launchctl unload ~/Library/LaunchAgents/com.paceacademy.pace-ai-edu.plist
+          launchctl load ~/Library/LaunchAgents/com.paceacademy.pace-ai-edu.plist
+
+      - name: Health check
+        run: sleep 5 && curl -sf http://localhost:3001/health
