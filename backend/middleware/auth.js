@@ -11,11 +11,6 @@ const authMiddleware = (req, res, next) => {
     return res.status(401).json({ error: 'Unauthorized: Missing Cloudflare Access Header' });
   }
 
-  // Restrict to @paceacademy.org
-  if (!email.endsWith('@paceacademy.org')) {
-    return res.status(403).json({ error: 'Forbidden: Access restricted to @paceacademy.org domain' });
-  }
-
   req.user = email;
   next();
 };
