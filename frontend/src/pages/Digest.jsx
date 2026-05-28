@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 
 const formatDate = (dateStr) => {
@@ -10,12 +10,21 @@ const parseSteps = (raw) => {
   try { return JSON.parse(raw || '[]'); } catch { return []; }
 };
 
+const POLL_INTERVAL = 12000;
+const POLL_TIMEOUT = 15 * 60 * 1000;
+
 const Digest = () => {
   const [articles, setArticles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
+  const pollRef = useRef(null);
+  const pollStartRef = useRef(null);
 
-  useEffect(() => { fetchDigest(); }, []);
+  useEffect(() => { fetchDigest(); return () => stopPolling(); }, []);
+
+  const stopPolling = () => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  };
 
   const fetchDigest = async () => {
     setLoading(true);
@@ -29,14 +38,35 @@ const Digest = () => {
     }
   };
 
+  const pollForResults = () => {
+    pollStartRef.current = Date.now();
+    pollRef.current = setInterval(async () => {
+      if (Date.now() - pollStartRef.current > POLL_TIMEOUT) {
+        stopPolling();
+        setRegenerating(false);
+        return;
+      }
+      try {
+        const res = await axios.get('/api/digest/me');
+        if (res.data.length > 0) {
+          setArticles(res.data);
+          stopPolling();
+          setRegenerating(false);
+        }
+      } catch (err) {
+        console.error('Poll error:', err);
+      }
+    }, POLL_INTERVAL);
+  };
+
   const handleRegenerate = async () => {
     setRegenerating(true);
+    setArticles([]);
     try {
       await axios.post('/api/digest/regenerate');
-      setTimeout(fetchDigest, 2000);
+      pollForResults();
     } catch (err) {
       console.error('Error regenerating digest:', err);
-    } finally {
       setRegenerating(false);
     }
   };
@@ -55,11 +85,16 @@ const Digest = () => {
           <p className="digest-subtitle">Research matched to your classroom, ready to use.</p>
         </div>
         <button className="btn-refresh" onClick={handleRegenerate} disabled={regenerating}>
-          {regenerating ? 'Refreshing…' : 'Refresh'}
+          {regenerating ? 'Generating…' : 'Refresh'}
         </button>
       </div>
 
-      {articles.length === 0 ? (
+      {regenerating ? (
+        <div className="generating-state">
+          <p className="generating-headline">Finding your articles…</p>
+          <p className="generating-subtext">The AI is reading through research right now. This takes a few minutes — sit tight.</p>
+        </div>
+      ) : articles.length === 0 ? (
         <div className="empty-state">
           No articles yet — fill out your profile so we know what to look for.
         </div>

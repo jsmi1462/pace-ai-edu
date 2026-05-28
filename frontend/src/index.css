@@ -242,6 +242,23 @@ body {
   font-size: 0.875rem;
   color: var(--ink-mid);
 }
+.generating-state {
+  padding: 4rem 0;
+  border-top: var(--rule-heavy);
+}
+.generating-headline {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 400;
+  color: var(--ink-dark);
+  margin: 0 0 0.75rem;
+}
+.generating-subtext {
+  font-family: var(--font-ui);
+  font-size: 0.875rem;
+  color: var(--ink-mid);
+  margin: 0;
+}
 
 /* ─── Profile ────────────────────────────────── */
 .profile-title {
