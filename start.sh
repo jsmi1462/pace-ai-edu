@@ -48,11 +48,17 @@ npm start &
 BACKEND_PID=$!
 cd ..
 
-# Start Cloudflare Quick Tunnel
+# Start Cloudflare Tunnel
 if command -v cloudflared >/dev/null 2>&1; then
-  echo "Starting Cloudflare Quick Tunnel (URL will appear below)..."
-  cloudflared tunnel --url http://localhost:${PORT:-3001} 2>&1 | grep -E "trycloudflare|ERR" &
-  TUNNEL_PID=$!
+  if [ -n "$CLOUDFLARE_TUNNEL_TOKEN" ]; then
+    echo "Starting Cloudflare named tunnel..."
+    cloudflared tunnel run --token "$CLOUDFLARE_TUNNEL_TOKEN" &
+    TUNNEL_PID=$!
+  else
+    echo "Starting Cloudflare Quick Tunnel (URL will appear below)..."
+    cloudflared tunnel --url http://localhost:${PORT:-3001} 2>&1 | grep -E "trycloudflare|ERR" &
+    TUNNEL_PID=$!
+  fi
 else
   echo "WARNING: cloudflared not installed. Run: brew install cloudflare/cloudflare/cloudflared"
 fi
@@ -60,7 +66,7 @@ fi
 echo ""
 echo "Ready."
 echo "  Local:  http://localhost:${PORT:-3001}"
-echo "  Remote: check above for the trycloudflare.com URL (takes ~10 seconds to appear)"
+echo "  Remote: https://app.apexeducation.xyz"
 
 wait $BACKEND_PID
 if [ -n "$TUNNEL_PID" ]; then wait $TUNNEL_PID; fi
