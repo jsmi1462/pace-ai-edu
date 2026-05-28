@@ -20,8 +20,8 @@ app.get('/health', (req, res) => {
 // Apply auth middleware to all API routes below
 app.use(authMiddleware);
 
-app.use('/profile', profileRoutes);
-app.use('/digest', digestRoutes);
+app.use('/api/profile', profileRoutes);
+app.use('/api/digest', digestRoutes);
 
 // Serve built React frontend (production)
 const distPath = path.join(__dirname, '..', 'frontend', 'dist');
