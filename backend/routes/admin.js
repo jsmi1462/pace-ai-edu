@@ -1,10 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { Pool } = require('pg');
 const { spawn } = require('child_process');
 const path = require('path');
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = require('../db');
 
 router.get('/check', (req, res) => res.json({ ok: true }));
 

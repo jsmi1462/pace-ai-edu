@@ -1,10 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { Pool } = require('pg');
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL
-});
+const pool = require('../db');
 
 // GET /profile - Get profile for the authenticated user
 router.get('/', async (req, res) => {

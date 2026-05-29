@@ -113,24 +113,37 @@ class WorkflowManager:
             logging.info("[DRY RUN] Skipping DB writes.")
             return
 
-        # Upsert → embed → tag (all at ingest time so vector search is ready immediately)
-        embedded = 0
-        for article in new_articles:
-            article_id = self.db.upsert_article(article)
-            if not article_id:
-                continue
+        # Phase 1 — batch upsert articles (committed in chunks of 50, no embedding yet)
+        logging.info(f"Ingestion phase 1: upserting {len(new_articles)} articles...")
+        id_map = self.db.batch_upsert_articles(new_articles)
+        logging.info(f"Ingestion phase 1 complete: {len(id_map)} articles in DB.")
 
+        # Phase 2 — embed each article (API calls outside any transaction)
+        logging.info("Ingestion phase 2: embedding articles...")
+        emb_pairs: list[tuple[int, list[float]]] = []
+        for article in new_articles:
+            db_id = id_map.get(article['source_id'])
+            if not db_id:
+                continue
             emb = embedder.embed_article(article)
             if emb:
-                self.db.upsert_article_embedding(article_id, emb)
-                embedded += 1
+                emb_pairs.append((db_id, emb))
 
-            for dk in disc_map.get(article['source_id'], {'general'}):
-                self.db.tag_article_discipline(article_id, dk)
+        if emb_pairs:
+            self.db.batch_update_embeddings(emb_pairs)
+        logging.info(f"Ingestion phase 2 complete: {len(emb_pairs)} articles embedded.")
 
-        logging.info(
-            f"Ingestion complete: {len(new_articles)} upserted, {embedded} embedded and tagged."
-        )
+        # Phase 3 — tag disciplines
+        logging.info("Ingestion phase 3: tagging disciplines...")
+        tag_pairs = [
+            (id_map[a['source_id']], dk)
+            for a in new_articles
+            for dk in disc_map.get(a['source_id'], {'general'})
+            if a['source_id'] in id_map
+        ]
+        if tag_pairs:
+            self.db.batch_tag_disciplines(tag_pairs)
+        logging.info(f"Ingestion phase 3 complete: {len(tag_pairs)} tags written.")
 
     # ------------------------------------------------------------------
     # Per-teacher evaluation
@@ -224,6 +237,36 @@ class WorkflowManager:
         return len(culled)
 
     # ------------------------------------------------------------------
+    # End-of-run cleanup
+    # ------------------------------------------------------------------
+
+    def _cleanup_run(self, embedder: ArticleEmbedder) -> None:
+        """
+        Scans for articles with no embedding and re-embeds them.
+        Catches anything dropped by a crash or transient API failure during ingestion.
+        Runs at the end of every pipeline execution.
+        """
+        logging.info("=== Cleanup: scanning for articles with missing embeddings ===")
+        missing = self.db.get_articles_missing_embeddings()
+        if not missing:
+            logging.info("Cleanup: nothing to repair.")
+            return
+
+        logging.warning(f"Cleanup: {len(missing)} articles missing embeddings — re-embedding now.")
+        emb_pairs: list[tuple[int, list[float]]] = []
+        for article in missing:
+            emb = embedder.embed_text(
+                f"{article['title']}\n\n{(article['full_text'] or '')[:500]}"
+            )
+            if emb:
+                emb_pairs.append((article['id'], emb))
+
+        if emb_pairs:
+            self.db.batch_update_embeddings(emb_pairs)
+
+        logging.info(f"Cleanup: repaired {len(emb_pairs)}/{len(missing)} articles.")
+
+    # ------------------------------------------------------------------
     # Main execute
     # ------------------------------------------------------------------
 
@@ -255,6 +298,7 @@ class WorkflowManager:
                     )
 
             logging.info(f"LLM stats: {evaluator.get_stats()}")
+            self._cleanup_run(embedder)
 
         except Exception as e:
             logging.critical(f"Critical pipeline failure: {e}", exc_info=True)

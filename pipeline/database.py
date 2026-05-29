@@ -8,6 +8,12 @@ from .config import CONFIG
 def get_db_connection(database_url: str):
     try:
         conn = psycopg2.connect(database_url)
+        # Async WAL flush: commits return immediately without waiting for disk.
+        # Reads are completely unaffected (MVCC). Worst-case loss on a hard crash
+        # is ~1 commit — the end-of-run cleanup catches any gap.
+        with conn.cursor() as cur:
+            cur.execute("SET synchronous_commit = off")
+        conn.commit()
         return conn
     except psycopg2.OperationalError as e:
         logging.critical(f"Cannot connect to database: {e}")
@@ -252,6 +258,85 @@ class DatabaseManager:
         except Exception as e:
             logging.warning(f"tag_article_discipline failed ({article_id}, {discipline_key}): {e}")
             self.conn.rollback()
+
+    def batch_upsert_articles(self, articles: list[dict], chunk_size: int = 50) -> dict[str, int]:
+        """
+        Batch-upsert articles in chunks. Returns {source_id: db_id} for every row
+        successfully written. Each chunk is one commit — far less WAL pressure than
+        one commit per row.
+        """
+        id_map: dict[str, int] = {}
+        for i in range(0, len(articles), chunk_size):
+            chunk = articles[i:i + chunk_size]
+            records = [(
+                a['source_id'], a.get('source', ''), a.get('title', ''),
+                a.get('full_text', ''), a.get('authors', ''),
+                a.get('publication_date'), a.get('url', ''),
+            ) for a in chunk]
+            try:
+                with self.conn.cursor() as cur:
+                    rows = execute_values(cur, """
+                        INSERT INTO articles
+                            (source_id, source, title, full_text, authors, publication_date, url)
+                        VALUES %s
+                        ON CONFLICT (source_id) DO UPDATE SET
+                            title            = EXCLUDED.title,
+                            full_text        = EXCLUDED.full_text,
+                            publication_date = EXCLUDED.publication_date
+                        RETURNING id, source_id
+                    """, records, fetch=True)
+                    for row in rows:
+                        id_map[row[1]] = row[0]
+                self.conn.commit()
+                logging.info(f"batch_upsert_articles: chunk {i // chunk_size + 1} → {len(rows)} rows")
+            except Exception as e:
+                logging.error(f"batch_upsert_articles chunk {i // chunk_size + 1} failed: {e}")
+                self.conn.rollback()
+        return id_map
+
+    def batch_update_embeddings(self, id_emb_pairs: list[tuple[int, list[float]]], chunk_size: int = 50) -> None:
+        """Batch-update the embedding column. Chunks keep transactions short."""
+        for i in range(0, len(id_emb_pairs), chunk_size):
+            chunk = id_emb_pairs[i:i + chunk_size]
+            records = [
+                ('[' + ','.join(f'{x:.8f}' for x in emb) + ']', article_id)
+                for article_id, emb in chunk
+            ]
+            try:
+                with self.conn.cursor() as cur:
+                    execute_values(cur, """
+                        UPDATE articles SET embedding = data.emb::vector
+                        FROM (VALUES %s) AS data(emb, id)
+                        WHERE articles.id = data.id::int
+                    """, records)
+                self.conn.commit()
+            except Exception as e:
+                logging.error(f"batch_update_embeddings chunk {i // chunk_size + 1} failed: {e}")
+                self.conn.rollback()
+
+    def batch_tag_disciplines(self, id_dk_pairs: list[tuple[int, str]], chunk_size: int = 200) -> None:
+        """Batch-insert article discipline tags."""
+        for i in range(0, len(id_dk_pairs), chunk_size):
+            chunk = id_dk_pairs[i:i + chunk_size]
+            try:
+                with self.conn.cursor() as cur:
+                    execute_values(cur, """
+                        INSERT INTO article_disciplines (article_id, discipline_key)
+                        VALUES %s ON CONFLICT DO NOTHING
+                    """, chunk)
+                self.conn.commit()
+            except Exception as e:
+                logging.error(f"batch_tag_disciplines chunk {i // chunk_size + 1} failed: {e}")
+                self.conn.rollback()
+
+    def get_articles_missing_embeddings(self, limit: int = 2000) -> list[dict]:
+        """Returns articles that were written but never embedded — crash recovery."""
+        with self.conn.cursor(cursor_factory=DictCursor) as cur:
+            cur.execute(
+                "SELECT id, title, full_text FROM articles WHERE embedding IS NULL LIMIT %s",
+                (limit,)
+            )
+            return [dict(row) for row in cur.fetchall()]
 
     def search_articles_by_vector(
         self,
