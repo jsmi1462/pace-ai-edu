@@ -38,7 +38,7 @@ class Config:
     MIN_ARTICLES_PER_TEACHER      = int(os.getenv("MIN_ARTICLES_PER_TEACHER", 3))
     MAX_ARTICLES_PER_TEACHER      = int(os.getenv("MAX_ARTICLES_PER_TEACHER", 7))
 
-    # RSS feeds — 13 confirmed working as of 2026-05
+    # RSS feeds — confirmed working as of 2026-05
     RSS_FEEDS = [
         f.strip() for f in
         os.getenv(
@@ -59,12 +59,23 @@ class Config:
             # Subject-area organizations
             "https://www.ncte.org/rss/,"
             # News / current practice
-            "https://www.educationdive.com/feeds/news/"
+            "https://www.educationdive.com/feeds/news/,"
+            # Expanded: broader education coverage
+            "https://www.edutopia.org/feeds/posts,"
+            "https://www.kqed.org/mindshift/feed,"
+            "https://www.the74million.org/feed/,"
+            "https://www.edweek.org/feeds/news.xml,"
+            "https://www.ascd.org/rss/blogs_rss.xml,"
+            "https://www.brookings.edu/topic/education/feed/,"
+            "https://www.edsurge.com/news.rss,"
+            "https://www.eschoolnews.com/feed/,"
+            "https://www.educationweek.org/section/early-childhood/rss.xml,"
+            "https://chausa.org/news/rss"
         ).split(",") if f.strip()
     ]
 
     # ERIC API settings
-    ERIC_MAX_PER_QUERY  = int(os.getenv("ERIC_MAX_PER_QUERY", 200))   # articles per broad query
+    ERIC_MAX_PER_QUERY  = int(os.getenv("ERIC_MAX_PER_QUERY", 2000))  # articles per discipline query
     ERIC_TEACHER_MAX    = int(os.getenv("ERIC_TEACHER_MAX", 100))      # extra targeted fetch per teacher
 
     # Pace Academy mission statement (injected into every prompt)

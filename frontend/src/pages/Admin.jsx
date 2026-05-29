@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 const fmt = (d) => {
@@ -13,6 +14,7 @@ const Admin = () => {
   const [forbidden, setForbidden] = useState(false);
   const [running, setRunning] = useState({});
   const [runningAll, setRunningAll] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     Promise.all([
@@ -33,6 +35,12 @@ const Admin = () => {
     } finally {
       setRunning(r => ({ ...r, [email]: false }));
     }
+  };
+
+  const impersonate = (email) => {
+    localStorage.setItem('impersonating', email);
+    window.dispatchEvent(new CustomEvent('impersonation-change'));
+    navigate('/');
   };
 
   const runAll = async () => {
@@ -69,6 +77,7 @@ const Admin = () => {
               <th>Sent</th>
               <th>Last Run</th>
               <th></th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -96,6 +105,15 @@ const Admin = () => {
                     title={`Run pipeline for ${u.email}`}
                   >
                     {running[u.email] ? '…' : '↺'}
+                  </button>
+                </td>
+                <td>
+                  <button
+                    className="btn-view-as"
+                    onClick={() => impersonate(u.email)}
+                    title={`View digest as ${u.email}`}
+                  >
+                    View as →
                   </button>
                 </td>
               </tr>

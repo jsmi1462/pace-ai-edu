@@ -420,6 +420,35 @@ textarea.form-input:focus { border-color: var(--ink); }
   margin-top: 1rem;
 }
 
+/* ─── Impersonation banner ───────────────────── */
+.impersonation-banner {
+  background: var(--accent);
+  color: var(--cream);
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 0.5rem var(--px);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  max-width: 100%;
+}
+.btn-exit-impersonation {
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cream);
+  background: none;
+  border: 1px solid rgba(248,244,237,0.5);
+  padding: 0.2rem 0.6rem;
+  cursor: pointer;
+  margin-left: auto;
+  transition: background 0.15s;
+}
+.btn-exit-impersonation:hover { background: rgba(248,244,237,0.15); }
+
 /* ─── Admin ──────────────────────────────────── */
 .admin-content {
   max-width: calc(900px + var(--px) * 2);
@@ -515,6 +544,20 @@ textarea.form-input:focus { border-color: var(--ink); }
 }
 .btn-admin-run:hover { border-color: var(--ink); color: var(--ink); }
 .btn-admin-run:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn-view-as {
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+.btn-view-as:hover { opacity: 0.7; }
 .btn-run-single {
   font-family: var(--font-ui);
   font-size: 0.875rem;
