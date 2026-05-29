@@ -3,8 +3,10 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const authMiddleware = require('./middleware/auth');
+const adminAuth = require('./middleware/adminAuth');
 const profileRoutes = require('./routes/profile');
 const digestRoutes = require('./routes/digest');
+const adminRoutes = require('./routes/admin');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -22,6 +24,7 @@ app.use(authMiddleware);
 
 app.use('/api/profile', profileRoutes);
 app.use('/api/digest', digestRoutes);
+app.use('/api/admin', adminAuth, adminRoutes);
 
 // Serve built React frontend (production)
 const distPath = path.join(__dirname, '..', 'frontend', 'dist');
