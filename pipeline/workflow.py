@@ -25,9 +25,10 @@ from .personalizer import select_best_articles
 
 
 class WorkflowManager:
-    def __init__(self, teacher_email: str = None, dry_run: bool = False):
+    def __init__(self, teacher_email: str = None, dry_run: bool = False, evaluate_only: bool = False):
         self.teacher_email = teacher_email
         self.dry_run = dry_run
+        self.evaluate_only = evaluate_only
         self.run_id = f"Run_{datetime.now():%Y%m%d_%H%M%S}"
         self.conn = None
         self.db = None
@@ -239,7 +240,10 @@ class WorkflowManager:
             embedder  = ArticleEmbedder()
             evaluator = LLMEvaluator()
 
-            self._ingest_articles(teachers, embedder)
+            if self.evaluate_only:
+                logging.info("evaluate-only mode: skipping ingestion.")
+            else:
+                self._ingest_articles(teachers, embedder)
 
             logging.info(f"Processing {len(teachers)} teacher(s).")
             for teacher in teachers:

@@ -3,26 +3,18 @@ ERIC API fetcher — Education Resources Information Center.
 Free, no API key, 2M+ peer-reviewed education articles.
 API docs: https://api.ies.ed.gov/eric/
 
-Articles are fetched per discipline using targeted queries and cached
-per-discipline in .eric_cache.json (24-hour TTL).
+Articles are fetched per discipline using targeted queries. Deduplication
+against already-ingested articles is handled by the database layer.
 """
 
 import hashlib
-import json
 import logging
-import os
 import time
 from datetime import date, datetime
 
 import requests
 
 from ..config import CONFIG
-
-_CACHE_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    ".eric_cache.json"
-)
-_CACHE_TTL_HOURS = 24
 
 ERIC_API_URL = "https://api.ies.ed.gov/eric/"
 
@@ -91,33 +83,12 @@ def _is_recent(pub_date: date | None, max_age_days: int) -> bool:
     return (date.today() - pub_date).days <= max_age_days
 
 
-def _load_cache() -> dict:
-    if not os.path.exists(_CACHE_PATH):
-        return {}
-    try:
-        with open(_CACHE_PATH) as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-
-def _save_cache(cache: dict) -> None:
-    try:
-        with open(_CACHE_PATH, "w") as f:
-            json.dump(cache, f)
-    except Exception as e:
-        logging.warning(f"ERIC cache write failed: {e}")
-
-
 def fetch_eric_for_discipline(
     discipline_key: str,
     max_results: int = None,
     max_age_days: int = None,
 ) -> list[dict]:
-    """
-    Returns articles for a single discipline key, using the per-discipline cache.
-    Fetches from ERIC API if cache is missing or stale.
-    """
+    """Fetches articles for a discipline from ERIC. DB layer handles deduplication."""
     if max_results is None:
         max_results = CONFIG.ERIC_MAX_PER_QUERY
     if max_age_days is None:
@@ -127,18 +98,6 @@ def fetch_eric_for_discipline(
     if not query:
         logging.warning(f"No ERIC query defined for discipline '{discipline_key}'")
         return []
-
-    cache = _load_cache()
-    entry = cache.get(discipline_key, {})
-    age_hours = (time.time() - entry.get("timestamp", 0)) / 3600
-
-    if entry and age_hours < _CACHE_TTL_HOURS:
-        articles = entry["articles"]
-        for a in articles:
-            if a.get("publication_date"):
-                a["publication_date"] = date.fromisoformat(a["publication_date"])
-        logging.info(f"ERIC cache hit [{discipline_key}] ({age_hours:.1f}h old): {len(articles)} articles.")
-        return articles
 
     logging.info(f"ERIC fetching [{discipline_key}]: '{query[:60]}...'")
     seen_ids: set[str] = set()
@@ -150,18 +109,6 @@ def fetch_eric_for_discipline(
         articles = []
 
     logging.info(f"ERIC [{discipline_key}]: {len(articles)} articles")
-
-    # Serialize dates for JSON, write to per-discipline cache entry
-    serializable = []
-    for a in articles:
-        row = dict(a)
-        if isinstance(row.get("publication_date"), date):
-            row["publication_date"] = row["publication_date"].isoformat()
-        serializable.append(row)
-
-    cache[discipline_key] = {"timestamp": time.time(), "articles": serializable}
-    _save_cache(cache)
-
     return articles
 
 def _fetch_query(

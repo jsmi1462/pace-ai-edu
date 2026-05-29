@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.paceacademy.pace-ai-edu.weekly-pipeline</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/compsci/pace-ai-edu/scripts/run_weekly_pipeline.sh</string>
+    </array>
+
+    <!-- Sunday at 12:01 AM -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Weekday</key>
+        <integer>0</integer>
+        <key>Hour</key>
+        <integer>0</integer>
+        <key>Minute</key>
+        <integer>1</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/compsci/pace-ai-edu/logs/weekly-pipeline.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/compsci/pace-ai-edu/logs/weekly-pipeline-error.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>
