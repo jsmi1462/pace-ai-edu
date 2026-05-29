@@ -320,10 +320,23 @@ body {
   background: var(--brick);
   transition: width 1.2s ease;
 }
+.progress-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 420px;
+}
 .progress-label {
   font-family: var(--font-ui);
   font-size: 0.75rem;
   color: var(--ink-mid);
+  margin: 0;
+  letter-spacing: 0.03em;
+}
+.progress-time {
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  color: var(--ink-faint);
   margin: 0;
   letter-spacing: 0.03em;
 }

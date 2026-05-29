@@ -22,9 +22,12 @@ const Digest = () => {
   const [regenerating, setRegenerating] = useState(false);
   const [noMatches, setNoMatches] = useState(false);
   const [progress, setProgress] = useState({ evaluated: 0, total: 50 });
+  const [timeRemaining, setTimeRemaining] = useState(null);
   const pollRef = useRef(null);
   const pollStartRef = useRef(null);
   const progressRef = useRef(null);
+  const startTimeRef = useRef(null);
+  const baselineRef = useRef(0);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -34,6 +37,8 @@ const Digest = () => {
       navigate('/', { replace: true });
       setLoading(false);
       setRegenerating(true);
+      startTimeRef.current = Date.now();
+      baselineRef.current = 0;
       pollForResults();
     } else {
       fetchDigest();
@@ -50,9 +55,19 @@ const Digest = () => {
     progressRef.current = setInterval(async () => {
       try {
         const res = await axios.get('/api/digest/progress');
-        setProgress(res.data);
-        checkComplete(res.data.evaluated, res.data.total);
-      } catch (err) { /* silent */ }
+        const { evaluated, total } = res.data;
+        const net = Math.max(0, evaluated - baselineRef.current);
+        setProgress({ evaluated: net, total });
+
+        const elapsed = (Date.now() - startTimeRef.current) / 1000;
+        if (net >= 3 && elapsed >= 15) {
+          const rate = net / elapsed;
+          const remaining = Math.ceil((total - net) / rate / 60);
+          setTimeRemaining(Math.max(0, remaining));
+        }
+
+        checkComplete(net, total);
+      } catch { /* silent */ }
     }, 8000);
   };
 
@@ -98,6 +113,7 @@ const Digest = () => {
 
   const pollForResults = () => {
     setProgress({ evaluated: 0, total: 50 });
+    setTimeRemaining(null);
     startProgressPolling();
     pollStartRef.current = Date.now();
     pollRef.current = setInterval(async () => {
@@ -125,6 +141,15 @@ const Digest = () => {
     setRegenerating(true);
     setNoMatches(false);
     setArticles([]);
+    startTimeRef.current = Date.now();
+
+    try {
+      const prog = await axios.get('/api/digest/progress');
+      baselineRef.current = prog.data.evaluated;
+    } catch {
+      baselineRef.current = 0;
+    }
+
     try {
       await axios.post('/api/digest/regenerate');
       pollForResults();
@@ -159,14 +184,22 @@ const Digest = () => {
           <div className="progress-bar-track">
             <div
               className="progress-bar-fill"
-              style={{ width: `${Math.min(100, Math.round((progress.evaluated / progress.total) * 100))}%` }}
+              style={{ width: `${Math.min(95, Math.round((progress.evaluated / progress.total) * 100))}%` }}
             />
           </div>
-          <p className="progress-label">
-            {progress.evaluated === 0
-              ? 'Starting up…'
-              : `${progress.evaluated} of ~${progress.total} articles evaluated`}
-          </p>
+          <div className="progress-footer">
+            <p className="progress-label">
+              {progress.evaluated === 0
+                ? 'Starting up…'
+                : `${progress.evaluated} of ~${progress.total} articles evaluated`}
+            </p>
+            <p className="progress-time">
+              {timeRemaining === null ? 'Estimating…'
+                : timeRemaining <= 0 ? 'Almost done…'
+                : timeRemaining === 1 ? '~1 min remaining'
+                : `~${timeRemaining} min remaining`}
+            </p>
+          </div>
         </div>
       ) : !hasProfile ? (
         <div className="welcome-state">
@@ -179,8 +212,10 @@ const Digest = () => {
           No new research matched your profile this run — check back after next Monday's update, or click Refresh to try again.
         </div>
       ) : articles.length === 0 ? (
-        <div className="empty-state">
-          Your digest is empty — click Refresh to generate your first reading list.
+        <div className="welcome-state">
+          <h2 className="welcome-headline">Ready to find your articles.</h2>
+          <p className="welcome-body">We'll scan recent research and find articles matched to your classroom. Takes about 5–10 minutes.</p>
+          <button className="btn-start" onClick={handleRegenerate}>Generate my digest →</button>
         </div>
       ) : (
       <>

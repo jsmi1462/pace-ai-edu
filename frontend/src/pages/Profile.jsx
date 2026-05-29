@@ -77,7 +77,14 @@ const Profile = () => {
     setMessage('Saving…');
     try {
       await axios.post('/api/profile', profile);
-      if (isOnboarding) {
+
+      let hasArticles = false;
+      try {
+        const res = await axios.get('/api/digest/me');
+        hasArticles = res.data.articles.length > 0;
+      } catch {}
+
+      if (!hasArticles || isOnboarding) {
         await axios.post('/api/digest/regenerate');
         navigate('/?generating=true');
       } else {
