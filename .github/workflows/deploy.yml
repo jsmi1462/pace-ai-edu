@@ -11,6 +11,9 @@ jobs:
       - name: Pull latest code
         run: git -C ~/pace-ai-edu pull origin main
 
+      - name: Install Python dependencies
+        run: python3 -m pip install -r ~/pace-ai-edu/requirements.txt
+
       - name: Install backend dependencies
         run: cd ~/pace-ai-edu/backend && npm install --silent
 

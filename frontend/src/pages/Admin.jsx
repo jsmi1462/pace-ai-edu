@@ -35,6 +35,7 @@ const Admin = () => {
   const [logTab, setLogTab] = useState('__all__');
   const [logsOpen, setLogsOpen] = useState(true);
   const logEndRef = useRef(null);
+  const terminalRef = useRef(null);
   const pollTimer = useRef(null);
 
   const navigate = useNavigate();
@@ -81,10 +82,10 @@ const Admin = () => {
     return () => clearTimeout(pollTimer.current);
   }, [pollStatus, anyRunning]);
 
-  // Auto-scroll log panel only when a pipeline is actively running
+  // Scroll inside the terminal box (not the page) when a pipeline is running
   useEffect(() => {
-    if (logsOpen && anyRunning && logEndRef.current) {
-      logEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (logsOpen && anyRunning && terminalRef.current) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
     }
   }, [pipelineStatus.logs, logTab, logsOpen, anyRunning]);
 
@@ -343,7 +344,7 @@ const Admin = () => {
                 </button>
               ))}
             </div>
-            <div className="admin-terminal">
+            <div className="admin-terminal" ref={terminalRef}>
               {currentLogs.length === 0 ? (
                 <div className="admin-terminal-empty">No log output yet.</div>
               ) : (
