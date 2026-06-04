@@ -350,27 +350,31 @@ class DatabaseManager:
         vec = '[' + ','.join(f'{x:.8f}' for x in query_embedding) + ']'
 
         if discipline_key:
-            discipline_filter = "ad.discipline_key IN %s"
-            discipline_params = ((discipline_key, 'general'),)
+            exists_clause = """EXISTS (
+                SELECT 1 FROM article_disciplines ad
+                WHERE ad.article_id = a.id AND ad.discipline_key IN %s
+            )"""
+            exists_params = ((discipline_key, 'general'),)
         else:
-            discipline_filter = "TRUE"
-            discipline_params = ()
+            exists_clause = """EXISTS (
+                SELECT 1 FROM article_disciplines ad WHERE ad.article_id = a.id
+            )"""
+            exists_params = ()
 
         q = f"""
-            SELECT DISTINCT ON (a.id)
+            SELECT
                 a.id, a.source_id, a.source, a.title, a.full_text,
                 a.authors, a.publication_date, a.url,
                 (a.embedding <=> %s::vector) AS distance
             FROM articles a
-            JOIN article_disciplines ad ON a.id = ad.article_id
-            WHERE {discipline_filter}
+            WHERE {exists_clause}
               AND a.embedding IS NOT NULL
-            ORDER BY a.id, distance ASC
+            ORDER BY distance ASC
             LIMIT %s;
         """
         try:
             with self.conn.cursor(cursor_factory=DictCursor) as cur:
-                cur.execute(q, (vec,) + discipline_params + (limit,))
+                cur.execute(q, (vec,) + exists_params + (limit,))
                 rows = cur.fetchall()
             results = []
             for row in rows:
@@ -378,8 +382,6 @@ class DatabaseManager:
                 d['_db_id'] = d['id']
                 d['_distance'] = d.pop('distance', 1.0)
                 results.append(d)
-            # Re-sort by distance ascending (DISTINCT ON ordering may vary)
-            results.sort(key=lambda r: r['_distance'])
             return results
         except Exception as e:
             logging.warning(f"Vector search failed: {e}")
@@ -392,11 +394,12 @@ class DatabaseManager:
             return cur.fetchone()[0]
 
     def get_evaluated_article_ids(self, teacher_email: str) -> set[int]:
-        """Returns article IDs already evaluated for this teacher — skip re-evaluation."""
+        """Returns article IDs already evaluated (Yes or No) for this teacher — skip re-evaluation.
+        Error decisions are excluded so failed evaluations are retried on the next run."""
         with self.conn.cursor() as cur:
             cur.execute(
                 """SELECT article_id FROM teacher_article_matches
-                   WHERE teacher_email = %s AND decision IS NOT NULL""",
+                   WHERE teacher_email = %s AND decision IN ('Yes', 'No')""",
                 (teacher_email,)
             )
             return {row[0] for row in cur.fetchall()}
