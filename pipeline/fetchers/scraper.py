@@ -1,5 +1,7 @@
 import logging
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from urllib.parse import urlparse
 
 from newspaper import Article
 
@@ -26,9 +28,17 @@ def enrich_articles_with_full_text(articles: list[dict], max_workers: int = 6) -
 
     url_to_article = {a['url']: a for a in articles if a.get('url')}
 
+    # One lock per domain — serializes requests to the same host to avoid 429s
+    domains = {urlparse(url).netloc for url in url_to_article}
+    domain_locks = {domain: threading.Lock() for domain in domains}
+
+    def scrape_locked(url: str) -> str | None:
+        with domain_locks[urlparse(url).netloc]:
+            return scrape_full_text(url)
+
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_url = {
-            executor.submit(scrape_full_text, url): url
+            executor.submit(scrape_locked, url): url
             for url in url_to_article
         }
         scraped, failed = 0, 0
