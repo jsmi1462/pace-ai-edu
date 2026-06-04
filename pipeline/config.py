@@ -51,27 +51,20 @@ class Config:
             "https://larryferlazzo.edublogs.org/feed/,"
             "https://www.responsiveclassroom.org/feed/,"
             "https://blog.ed.ted.com/feed/,"
+            "https://www.coolcatteacher.com/feed/,"
+            "https://www.weareteachers.com/feed/,"
             # Research-adjacent / policy
             "https://hechingerreport.org/feed/,"
             "https://www.nwea.org/blog/feed/,"
+            "https://www.educationnext.org/feed/,"
             # Subject-area organizations
             "https://www.ncte.org/rss/,"
             # News / current practice
             "https://www.educationdive.com/feeds/news/,"
             "https://www.eschoolnews.com/feed/,"
             "https://www.the74million.org/feed/,"
-            # KQED MindShift — fixed feed URL
             "https://mindshift.kqed.org/feed/,"
-            # EdWeek — updated feed URL
-            "https://www.edweek.org/feed/,"
-            # Edutopia — updated feed URL
-            "https://www.edutopia.org/feeds/main,"
-            # ASCD — updated feed URL
-            "https://www.ascd.org/rss/,"
-            # EdSurge — updated feed URL
-            "https://www.edsurge.com/rss/,"
-            # Brookings education blog
-            "https://www.brookings.edu/blog/brown-center-chalkboard/feed/"
+            "https://www.edsurge.com/rss/"
         ).split(",") if f.strip()
     ]
 

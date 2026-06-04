@@ -1,5 +1,6 @@
 import hashlib
 import logging
+import re
 from datetime import date, timedelta
 
 import feedparser
@@ -8,6 +9,20 @@ import requests
 from ..config import CONFIG
 
 _HEADERS = {'User-Agent': 'Mozilla/5.0 (compatible; PaceEduBot/1.0)'}
+
+# HTML named entities not defined in XML — replace with numeric equivalents
+# so lxml doesn't choke on feeds that embed HTML entities in their XML.
+_HTML_ENTITY_RE = re.compile(r'&(?!amp;|lt;|gt;|quot;|apos;|#)([a-zA-Z][a-zA-Z0-9]*);')
+
+def _sanitize_xml(content: bytes) -> bytes:
+    """Replace undefined HTML named entities with their UTF-8 characters."""
+    import html
+    def replace(m):
+        try:
+            return html.unescape(m.group(0)).encode('utf-8').decode('utf-8')
+        except Exception:
+            return ''
+    return _HTML_ENTITY_RE.sub(replace, content.decode('utf-8', errors='replace')).encode('utf-8')
 
 
 def _parse_pub_date(entry) -> date | None:
@@ -59,7 +74,7 @@ def fetch_rss_articles(max_age_days: int = None) -> list[dict]:
                 logging.warning(f"RSS {source}: HTTP {resp.status_code} — skipping")
                 continue
 
-            feed = feedparser.parse(resp.content)
+            feed = feedparser.parse(_sanitize_xml(resp.content))
             if feed.bozo and not feed.entries:
                 logging.warning(f"RSS {source}: parse error, 0 entries — {feed.bozo_exception}")
                 continue
