@@ -52,15 +52,22 @@ def fetch_rss_articles(max_age_days: int = None) -> list[dict]:
     all_articles = []
 
     for feed_url in CONFIG.RSS_FEEDS:
-        logging.info(f"Fetching RSS: {feed_url}")
+        source = _source_name(feed_url)
         try:
             resp = requests.get(feed_url, timeout=20, headers=_HEADERS)
-            resp.raise_for_status()
+            if resp.status_code != 200:
+                logging.warning(f"RSS {source}: HTTP {resp.status_code} — skipping")
+                continue
+
             feed = feedparser.parse(resp.content)
+            if feed.bozo and not feed.entries:
+                logging.warning(f"RSS {source}: parse error, 0 entries — {feed.bozo_exception}")
+                continue
             if feed.bozo:
-                logging.warning(f"RSS parse warning for {feed_url}: {feed.bozo_exception}")
+                logging.warning(f"RSS {source}: parse warning — {feed.bozo_exception}")
 
             count = 0
+            skipped_old = 0
             for entry in feed.entries:
                 url = entry.get('link', '')
                 if not url:
@@ -68,30 +75,33 @@ def fetch_rss_articles(max_age_days: int = None) -> list[dict]:
 
                 pub_date = _parse_pub_date(entry)
                 if pub_date and pub_date < cutoff:
+                    skipped_old += 1
                     continue
 
-                # Stable, reproducible ID based on URL
                 source_id = hashlib.sha256(url.encode()).hexdigest()[:32]
-
                 title = entry.get('title', '').strip()
-                # Use the RSS summary as a lightweight abstract; full text scraped separately
                 summary = entry.get('summary', '') or entry.get('description', '')
 
                 all_articles.append({
                     "source_id":        source_id,
-                    "source":           _source_name(feed_url),
+                    "source":           source,
                     "title":            title,
-                    "full_text":        summary,  # placeholder; scraper enriches this
+                    "full_text":        summary,
                     "authors":          entry.get('author', ''),
                     "publication_date": pub_date,
                     "url":              url,
                 })
                 count += 1
 
-            logging.info(f"  → {count} articles from {_source_name(feed_url)}")
+            if count == 0 and skipped_old > 0:
+                logging.info(f"RSS {source}: 0 recent articles ({skipped_old} older than {max_age_days}d)")
+            elif count == 0:
+                logging.info(f"RSS {source}: 0 articles (feed may be empty or entries have no links)")
+            else:
+                logging.info(f"RSS {source}: {count} articles")
 
         except Exception as e:
-            logging.error(f"Error fetching RSS feed {feed_url}: {e}", exc_info=True)
+            logging.error(f"RSS {source} ({feed_url}): {e}")
 
     logging.info(f"Total RSS articles fetched: {len(all_articles)}")
     return all_articles

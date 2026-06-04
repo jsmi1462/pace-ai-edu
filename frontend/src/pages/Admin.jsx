@@ -34,8 +34,8 @@ const Admin = () => {
   const [pipelineStatus, setPipelineStatus] = useState({ runAllActive: false, running: [], logs: {}, history: [] });
   const [logTab, setLogTab] = useState('__all__');
   const [logsOpen, setLogsOpen] = useState(true);
-  const logEndRef = useRef(null);
   const terminalRef = useRef(null);
+  const logSectionRef = useRef(null);
   const pollTimer = useRef(null);
 
   const navigate = useNavigate();
@@ -82,7 +82,7 @@ const Admin = () => {
     return () => clearTimeout(pollTimer.current);
   }, [pollStatus, anyRunning]);
 
-  // Scroll inside the terminal box (not the page) when a pipeline is running
+  // Scroll within the terminal box only — never touch page scroll
   useEffect(() => {
     if (logsOpen && anyRunning && terminalRef.current) {
       terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
@@ -317,7 +317,7 @@ const Admin = () => {
       </section>
 
       {/* ── Live Log Panel ── */}
-      <section className="admin-section admin-log-section">
+      <section className="admin-section admin-log-section" ref={logSectionRef}>
         <div className="admin-section-header">
           <h2 className="admin-section-title">
             Pipeline Log
@@ -358,7 +358,6 @@ const Admin = () => {
                   </div>
                 ))
               )}
-              <div ref={logEndRef} />
             </div>
           </div>
         )}
