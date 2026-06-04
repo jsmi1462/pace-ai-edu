@@ -75,6 +75,7 @@ const Admin = () => {
   const navigate = useNavigate();
 
   const anyRunning = pipelineStatus.runAllActive || pipelineStatus.running.length > 0;
+  const { running, runAllActive, logs, history } = pipelineStatus;
 
   const loadData = useCallback(async () => {
     try {
@@ -180,7 +181,6 @@ const Admin = () => {
   if (loading) return <div className="page-content"><p className="loading">Loading…</p></div>;
   if (forbidden) return <div className="page-content"><p className="loading">Access restricted.</p></div>;
 
-  const { running, runAllActive, logs, history } = pipelineStatus;
   const isTeacherRunning = (email) => runAllActive || running.includes(email);
 
   // Build log tab list
