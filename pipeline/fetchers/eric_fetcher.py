@@ -8,6 +8,7 @@ against already-ingested articles is handled by the database layer.
 """
 
 import hashlib
+import html
 import logging
 import time
 from datetime import date, datetime
@@ -168,7 +169,7 @@ def _fetch_query(
             articles.append({
                 "source_id":        source_id,
                 "source":           "ERIC",
-                "title":            (doc.get("title") or "").strip(),
+                "title":            html.unescape((doc.get("title") or "").strip()),
                 "full_text":        abstract,
                 "authors":          authors_str,
                 "publication_date": pub_date,
