@@ -158,6 +158,36 @@ body {
 .digest-past-item:last-child { border-bottom: none; }
 .digest-past-item:hover { background: var(--paper); }
 .digest-past-item-active { color: var(--accent); font-weight: 600; }
+.digest-past-item-sub { padding-left: 1.75rem; }
+
+.digest-nav-group { display: flex; flex-direction: column; }
+.digest-nav-year-btn,
+.digest-nav-month-btn {
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-mid);
+  background: var(--paper);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  padding: 0.5rem 1rem;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+.digest-nav-month-btn {
+  font-size: 0.7rem;
+  padding-left: 1rem;
+  background: var(--cream);
+}
+.digest-nav-year-btn:hover,
+.digest-nav-month-btn:hover { color: var(--ink); }
+.digest-nav-chevron { font-size: 0.6rem; opacity: 0.6; }
 
 /* ─── Article ────────────────────────────────── */
 .article-list { display: flex; flex-direction: column; }

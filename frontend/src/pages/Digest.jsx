@@ -18,6 +18,99 @@ const parseSteps = (raw) => {
   try { return JSON.parse(raw || '[]'); } catch { return []; }
 };
 
+// ── Hierarchical date navigator ───────────────────────────────────────────────
+// Current month → individual dates
+// Older months  → collapsed to "Month Year", expand on click
+// Older years   → collapsed to "Year", expand on click
+const DateNav = ({ dates, currentDate, onSelect }) => {
+  const [expandedYears, setExpandedYears] = useState({});
+  const [expandedMonths, setExpandedMonths] = useState({});
+
+  const pastDates = dates.slice(1); // exclude the latest (already shown)
+  if (pastDates.length === 0) return null;
+
+  const latestYM  = dates[0]?.substring(0, 7) ?? ''; // "YYYY-MM"
+  const latestYear = dates[0]?.substring(0, 4) ?? ''; // "YYYY"
+
+  // Group: { "2026": { "2026-06": ["2026-06-04", ...], "2026-05": [...] } }
+  const groups = {};
+  for (const d of pastDates) {
+    const yr = d.substring(0, 4);
+    const ym = d.substring(0, 7);
+    if (!groups[yr]) groups[yr] = {};
+    if (!groups[yr][ym]) groups[yr][ym] = [];
+    groups[yr][ym].push(d);
+  }
+
+  const fmtMonth = (ym) => {
+    const [y, m] = ym.split('-').map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  };
+  const fmtDay = (d) => {
+    const [y, m, day] = d.split('-').map(Number);
+    return new Date(y, m - 1, day).toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+  };
+
+  const toggleYear  = (yr) => setExpandedYears(e  => ({ ...e, [yr]: !e[yr] }));
+  const toggleMonth = (ym) => setExpandedMonths(e => ({ ...e, [ym]: !e[ym] }));
+
+  return (
+    <div className="digest-past-dropdown">
+      {Object.keys(groups).sort((a, b) => b - a).map(yr => {
+        const isCurrentYear = yr === latestYear;
+        const yearOpen = isCurrentYear || !!expandedYears[yr];
+        const months = Object.keys(groups[yr]).sort((a, b) => b.localeCompare(a));
+
+        return (
+          <div key={yr} className="digest-nav-group">
+            {!isCurrentYear && (
+              <button className="digest-nav-year-btn" onClick={() => toggleYear(yr)}>
+                <span>{yr}</span>
+                <span className="digest-nav-chevron">{yearOpen ? '▾' : '▸'}</span>
+              </button>
+            )}
+            {yearOpen && months.map(ym => {
+              const isCurrentMonth = ym === latestYM;
+              const monthOpen = isCurrentMonth || !!expandedMonths[ym];
+              const mDates = groups[yr][ym];
+
+              if (isCurrentMonth) {
+                return mDates.map(d => (
+                  <button
+                    key={d}
+                    className={`digest-past-item ${d === currentDate ? 'digest-past-item-active' : ''}`}
+                    onClick={() => onSelect(d)}
+                  >
+                    {fmtDay(d)}
+                  </button>
+                ));
+              }
+
+              return (
+                <div key={ym}>
+                  <button className="digest-nav-month-btn" onClick={() => toggleMonth(ym)}>
+                    <span>{fmtMonth(ym)}</span>
+                    <span className="digest-nav-chevron">{monthOpen ? '▾' : '▸'}</span>
+                  </button>
+                  {monthOpen && mDates.map(d => (
+                    <button
+                      key={d}
+                      className={`digest-past-item digest-past-item-sub ${d === currentDate ? 'digest-past-item-active' : ''}`}
+                      onClick={() => onSelect(d)}
+                    >
+                      {fmtDay(d)}
+                    </button>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 const POLL_INTERVAL = 12000;
 const POLL_TIMEOUT = 15 * 60 * 1000;
 
@@ -202,24 +295,11 @@ const Digest = () => {
         <div className="digest-header-actions">
           {dates.length > 1 && (
             <div className="digest-past-wrapper">
-              <button
-                className="btn-past-issues"
-                onClick={() => setPastOpen(o => !o)}
-              >
+              <button className="btn-past-issues" onClick={() => setPastOpen(o => !o)}>
                 Past issues {pastOpen ? '▲' : '▼'}
               </button>
               {pastOpen && (
-                <div className="digest-past-dropdown">
-                  {dates.slice(1).map(d => (
-                    <button
-                      key={d}
-                      className={`digest-past-item ${d === currentDate ? 'digest-past-item-active' : ''}`}
-                      onClick={() => loadDate(d)}
-                    >
-                      {formatRunDate(d)}
-                    </button>
-                  ))}
-                </div>
+                <DateNav dates={dates} currentDate={currentDate} onSelect={loadDate} />
               )}
             </div>
           )}
