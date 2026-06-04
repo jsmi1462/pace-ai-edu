@@ -38,7 +38,7 @@ class Config:
     MIN_ARTICLES_PER_TEACHER      = int(os.getenv("MIN_ARTICLES_PER_TEACHER", 3))
     MAX_ARTICLES_PER_TEACHER      = int(os.getenv("MAX_ARTICLES_PER_TEACHER", 7))
 
-    # RSS feeds — confirmed working as of 2026-05
+    # RSS feeds — confirmed working as of 2026-06
     RSS_FEEDS = [
         f.strip() for f in
         os.getenv(
@@ -50,27 +50,28 @@ class Config:
             "https://www.gettingsmart.com/feed/,"
             "https://larryferlazzo.edublogs.org/feed/,"
             "https://www.responsiveclassroom.org/feed/,"
-            "https://corwin-connect.com/feed/,"
             "https://blog.ed.ted.com/feed/,"
             # Research-adjacent / policy
             "https://hechingerreport.org/feed/,"
             "https://www.nwea.org/blog/feed/,"
-            "https://www.mcrel.org/feed/,"
             # Subject-area organizations
             "https://www.ncte.org/rss/,"
             # News / current practice
             "https://www.educationdive.com/feeds/news/,"
-            # Expanded: broader education coverage
-            "https://www.edutopia.org/feeds/posts,"
-            "https://www.kqed.org/mindshift/feed,"
-            "https://www.the74million.org/feed/,"
-            "https://www.edweek.org/feeds/news.xml,"
-            "https://www.ascd.org/rss/blogs_rss.xml,"
-            "https://www.brookings.edu/topic/education/feed/,"
-            "https://www.edsurge.com/news.rss,"
             "https://www.eschoolnews.com/feed/,"
-            "https://www.educationweek.org/section/early-childhood/rss.xml,"
-            "https://chausa.org/news/rss"
+            "https://www.the74million.org/feed/,"
+            # KQED MindShift — fixed feed URL
+            "https://mindshift.kqed.org/feed/,"
+            # EdWeek — updated feed URL
+            "https://www.edweek.org/feed/,"
+            # Edutopia — updated feed URL
+            "https://www.edutopia.org/feeds/main,"
+            # ASCD — updated feed URL
+            "https://www.ascd.org/rss/,"
+            # EdSurge — updated feed URL
+            "https://www.edsurge.com/rss/,"
+            # Brookings education blog
+            "https://www.brookings.edu/blog/brown-center-chalkboard/feed/"
         ).split(",") if f.strip()
     ]
 
