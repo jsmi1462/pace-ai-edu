@@ -114,6 +114,48 @@ const DateNav = ({ dates, currentDate, onSelect }) => {
 const POLL_INTERVAL = 12000;
 const POLL_TIMEOUT = 15 * 60 * 1000;
 
+const RATINGS = [
+  { value: 'awesome',    label: 'Excellent' },
+  { value: 'good',       label: 'Good'      },
+  { value: 'bad',        label: 'Bad'       },
+  { value: 'irrelevant', label: 'Irrelevant'},
+];
+
+const RatingBar = ({ articleId, initial }) => {
+  const [current, setCurrent] = useState(initial || null);
+  const [saving, setSaving] = useState(false);
+
+  const rate = async (value) => {
+    const next = current === value ? null : value; // tap again to clear
+    setSaving(true);
+    try {
+      await axios.post('/api/digest/rate', { article_id: articleId, rating: next });
+      setCurrent(next);
+    } catch (e) {
+      console.error('Rating failed', e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rating-bar">
+      <span className="rating-label">Rate this</span>
+      {RATINGS.map(r => (
+        <button
+          key={r.value}
+          className={`rating-btn rating-btn-${r.value} ${current === r.value ? 'rating-btn-active' : ''}`}
+          onClick={() => rate(r.value)}
+          disabled={saving}
+          title={current === r.value ? 'Click to clear' : r.label}
+        >
+          {r.label}
+        </button>
+      ))}
+    </div>
+  );
+};
+
 const Digest = () => {
   const [articles, setArticles] = useState([]);
   const [fresh, setFresh] = useState(true);
@@ -396,6 +438,8 @@ const Digest = () => {
                     <strong>Pace connection — </strong>{article.mission_alignment}
                   </p>
                 )}
+
+                <RatingBar articleId={article.article_id} initial={article.user_rating} />
               </article>
             );
           })}

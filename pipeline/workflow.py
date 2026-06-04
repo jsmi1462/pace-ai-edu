@@ -14,6 +14,32 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
 from .config import CONFIG
+
+# Asymmetric weights: awesome pulls hard, irrelevant repels hard
+_RATING_WEIGHTS = {'awesome': 1.0, 'good': 0.35, 'bad': -0.3, 'irrelevant': -1.0}
+
+def _apply_rocchio_nudge(
+    query_emb: list[float],
+    rated: list[tuple[list[float], str]],
+    alpha: float,
+) -> list[float]:
+    """Shifts query_emb toward awesome/good articles and away from bad/irrelevant ones."""
+    if not rated:
+        return query_emb
+    dim = len(query_emb)
+    nudge = [0.0] * dim
+    for emb, rating in rated:
+        w = _RATING_WEIGHTS.get(rating, 0.0)
+        if w:
+            for i, v in enumerate(emb):
+                nudge[i] += w * v
+    norm = sum(x * x for x in nudge) ** 0.5
+    if norm < 1e-9:
+        return query_emb
+    nudge = [x / norm for x in nudge]
+    adjusted = [q + alpha * n for q, n in zip(query_emb, nudge)]
+    a_norm = sum(x * x for x in adjusted) ** 0.5
+    return [x / a_norm for x in adjusted]
 from .database import DatabaseManager, get_db_connection
 from .fetchers.rss_fetcher import fetch_rss_articles
 from .fetchers.scraper import enrich_articles_with_full_text
@@ -176,6 +202,17 @@ class WorkflowManager:
         query_emb  = embedder.embed_text(query_text)
         limit      = CONFIG.MAX_ARTICLES_PER_TEACHER * 10
 
+        # Apply Rocchio preference nudge from user ratings
+        if query_emb:
+            query_emb = _apply_rocchio_nudge(
+                query_emb,
+                self.db.get_rated_article_embeddings(email),
+                CONFIG.ROCCHIO_ALPHA,
+            )
+
+        # Build prompt-injection context from rated article titles
+        rated_titles = self.db.get_rated_article_titles(email)
+
         # 2a. Vector search (preferred)
         if query_emb:
             candidates = self.db.search_articles_by_vector(discipline_key, query_emb, limit=limit)
@@ -213,7 +250,7 @@ class WorkflowManager:
         results = []
         with ThreadPoolExecutor(max_workers=CONFIG.MAX_LLM_CONCURRENT_REQUESTS) as ex:
             future_to_art = {
-                ex.submit(evaluator.evaluate, art, teacher): art
+                ex.submit(evaluator.evaluate, art, teacher, rated_titles): art
                 for art in candidates
             }
             for future in as_completed(future_to_art):

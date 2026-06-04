@@ -52,5 +52,6 @@ CREATE TABLE IF NOT EXISTS teacher_article_matches (
     status              VARCHAR(50) DEFAULT 'pending',
     date_evaluated      DATE DEFAULT CURRENT_DATE,
     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    user_rating         VARCHAR(12) CHECK (user_rating IN ('awesome', 'good', 'bad', 'irrelevant')),
     UNIQUE (teacher_email, article_id)
 );

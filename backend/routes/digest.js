@@ -27,9 +27,9 @@ router.get('/me', async (req, res) => {
 
     const result = await pool.query(
       `SELECT
-         a.title, a.source, a.url, a.authors, a.publication_date,
+         a.id AS article_id, a.title, a.source, a.url, a.authors, a.publication_date,
          tam.summary, tam.action_steps, tam.mission_alignment,
-         tam.similarity_score, tam.date_evaluated, tam.status
+         tam.similarity_score, tam.date_evaluated, tam.status, tam.user_rating
        FROM teacher_article_matches tam
        JOIN articles a ON tam.article_id = a.id
        WHERE tam.teacher_email = $1
@@ -87,6 +87,27 @@ router.get('/:email', async (req, res) => {
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: 'DB error' });
+  }
+});
+
+// POST /digest/rate — save a user rating for an article
+router.post('/rate', async (req, res) => {
+  const email = req.user;
+  const { article_id, rating } = req.body;
+  const valid = ['awesome', 'good', 'bad', 'irrelevant', null];
+  if (!article_id || !valid.includes(rating)) {
+    return res.status(400).json({ error: 'Invalid article_id or rating' });
+  }
+  try {
+    await pool.query(
+      `UPDATE teacher_article_matches SET user_rating = $1
+       WHERE teacher_email = $2 AND article_id = $3`,
+      [rating, email, article_id]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Database error' });
   }
 });
 

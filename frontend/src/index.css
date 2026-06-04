@@ -307,6 +307,46 @@ body {
   color: var(--ink);
 }
 
+/* ─── Article rating bar ─────────────────────── */
+.rating-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: var(--rule-light);
+}
+.rating-label {
+  font-family: var(--font-ui);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-mid);
+  margin-right: 0.25rem;
+  white-space: nowrap;
+}
+.rating-btn {
+  font-family: var(--font-ui);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  background: none;
+  border: 1.5px solid var(--border);
+  color: var(--ink-mid);
+  padding: 0.25rem 0.6rem;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+.rating-btn:hover { border-color: var(--ink-mid); color: var(--ink); }
+.rating-btn:disabled { opacity: 0.5; cursor: default; }
+
+.rating-btn-awesome.rating-btn-active  { border-color: #b85c38; color: #b85c38; background: #fdf3ee; }
+.rating-btn-good.rating-btn-active     { border-color: #5a7a52; color: #5a7a52; background: #f0f5ef; }
+.rating-btn-bad.rating-btn-active      { border-color: #8c6b3e; color: #8c6b3e; background: #faf5ed; }
+.rating-btn-irrelevant.rating-btn-active { border-color: #888; color: #555; background: #f5f5f3; }
+
 /* ─── Empty / loading ────────────────────────── */
 .empty-state {
   padding: 4rem 0;

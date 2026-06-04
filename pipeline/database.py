@@ -98,9 +98,14 @@ class DatabaseManager:
                 status              VARCHAR(50) DEFAULT 'pending',
                 date_evaluated      DATE DEFAULT CURRENT_DATE,
                 created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                user_rating         VARCHAR(12) CHECK (user_rating IN ('awesome', 'good', 'bad', 'irrelevant')),
                 UNIQUE (teacher_email, article_id)
             )
             """,
+            # Migration: add user_rating to existing deployments
+            """ALTER TABLE teacher_article_matches
+               ADD COLUMN IF NOT EXISTS user_rating VARCHAR(12)
+               CHECK (user_rating IN ('awesome', 'good', 'bad', 'irrelevant'))""",
         ]
         try:
             with self.conn.cursor() as cur:
@@ -403,6 +408,51 @@ class DatabaseManager:
                 (teacher_email,)
             )
             return {row[0] for row in cur.fetchall()}
+
+    def get_rated_article_embeddings(self, teacher_email: str) -> list[tuple[list[float], str]]:
+        """Returns (embedding, rating) for all articles this teacher has rated.
+        Used to compute the Rocchio preference nudge for vector search."""
+        with self.conn.cursor() as cur:
+            cur.execute(
+                """SELECT a.embedding::text, tam.user_rating
+                   FROM teacher_article_matches tam
+                   JOIN articles a ON tam.article_id = a.id
+                   WHERE tam.teacher_email = %s
+                     AND tam.user_rating IS NOT NULL
+                     AND a.embedding IS NOT NULL""",
+                (teacher_email,)
+            )
+            results = []
+            for emb_str, rating in cur.fetchall():
+                emb = [float(x) for x in emb_str.strip('[]').split(',')]
+                results.append((emb, rating))
+            return results
+
+    def get_rated_article_titles(self, teacher_email: str) -> dict[str, list[str]]:
+        """Returns {rating: [title, ...]} for prompt injection context."""
+        with self.conn.cursor() as cur:
+            cur.execute(
+                """SELECT tam.user_rating, a.title
+                   FROM teacher_article_matches tam
+                   JOIN articles a ON tam.article_id = a.id
+                   WHERE tam.teacher_email = %s AND tam.user_rating IS NOT NULL
+                   ORDER BY tam.created_at DESC""",
+                (teacher_email,)
+            )
+            result: dict[str, list[str]] = {}
+            for rating, title in cur.fetchall():
+                result.setdefault(rating, []).append(title)
+            return result
+
+    def save_user_rating(self, teacher_email: str, article_id: int, rating: str | None) -> None:
+        with self.conn.cursor() as cur:
+            cur.execute(
+                """UPDATE teacher_article_matches
+                   SET user_rating = %s
+                   WHERE teacher_email = %s AND article_id = %s""",
+                (rating, teacher_email, article_id)
+            )
+        self.conn.commit()
 
     def get_already_seen_source_ids(self, source_ids: list[str]) -> set[str]:
         if not source_ids:

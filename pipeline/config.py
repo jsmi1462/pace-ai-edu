@@ -35,6 +35,8 @@ class Config:
     LLM_RETRY_ATTEMPTS            = int(os.getenv("LLM_RETRY_ATTEMPTS", 2))
     LLM_RETRY_DELAY_SECONDS       = int(os.getenv("LLM_RETRY_DELAY_SECONDS", 5))
     MAX_ARTICLE_AGE_DAYS          = int(os.getenv("MAX_ARTICLE_AGE_DAYS", 180))
+    # Rocchio preference nudge — how strongly user ratings bias the query vector (0–1)
+    ROCCHIO_ALPHA                 = float(os.getenv("ROCCHIO_ALPHA", 0.5))
     MIN_ARTICLES_PER_TEACHER      = int(os.getenv("MIN_ARTICLES_PER_TEACHER", 3))
     MAX_ARTICLES_PER_TEACHER      = int(os.getenv("MAX_ARTICLES_PER_TEACHER", 7))
 

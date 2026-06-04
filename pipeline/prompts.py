@@ -70,7 +70,7 @@ Focus on the discipline, current module, and specific tailoring goals.
 Keyword1, Keyword2, Keyword3..."""
 
 
-def get_system_prompt(profile):
+def get_system_prompt(profile, rated_titles: dict[str, list[str]] | None = None):
     """
     Generates a personalized system prompt with a rigorous pedagogical heuristic.
     """
@@ -102,10 +102,27 @@ def get_system_prompt(profile):
         "development, and a commitment to community."
     )
 
+    # Build rating hint — only when there's enough signal (3+ ratings)
+    rating_hint = ""
+    if rated_titles:
+        awesome   = (rated_titles.get('awesome', []) + rated_titles.get('good', []))[:4]
+        irrelevant = (rated_titles.get('irrelevant', []) + rated_titles.get('bad', []))[:4]
+        total = len(awesome) + len(irrelevant)
+        if total >= 3:
+            lines = []
+            if awesome:
+                lines.append(f"Previously rated highly: {'; '.join(awesome)}")
+            if irrelevant:
+                lines.append(f"Previously rated not useful: {'; '.join(irrelevant)}")
+            rating_hint = (
+                "\n### This teacher's past ratings (secondary signal — use to break ties):\n"
+                + "\n".join(lines) + "\n"
+            )
+
     prompt = f"""You are a trusted mentor helping {profile.get('first_name', 'a teacher')} find research that's actually useful in their classroom.
 Translate the article below into practical, direct advice — not textbook language.
 
-### About this teacher:
+{rating_hint}### About this teacher:
 - Discipline: {profile.get('discipline', 'General Education')}
 - Grade Band: {profile.get('grade_band', 'N/A')}
 - Current Unit: {profile.get('current_module', 'N/A')}

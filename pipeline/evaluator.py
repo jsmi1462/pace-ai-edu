@@ -153,14 +153,14 @@ class LLMEvaluator:
         logging.info(f"  Keywords for {teacher['email']}: {keywords}")
         return keywords
 
-    def evaluate(self, article: dict, teacher: dict) -> dict:
+    def evaluate(self, article: dict, teacher: dict, rated_titles: dict | None = None) -> dict:
         """
         Evaluates one article against one teacher profile.
         Returns a dict matching the ArticleEvaluation schema plus a raw 'decision' key.
         """
         label = f"{article.get('source_id','?')[:8]}|{teacher['email']}"
-        
-        system_prompt = get_system_prompt(teacher)
+
+        system_prompt = get_system_prompt(teacher, rated_titles)
 
         user_prompt = (
             f"Evaluate the following article for THIS teacher.\n\n"
