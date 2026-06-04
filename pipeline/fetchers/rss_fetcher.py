@@ -1,10 +1,13 @@
 import hashlib
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
 import feedparser
+import requests
 
 from ..config import CONFIG
+
+_HEADERS = {'User-Agent': 'Mozilla/5.0 (compatible; PaceEduBot/1.0)'}
 
 
 def _parse_pub_date(entry) -> date | None:
@@ -51,7 +54,9 @@ def fetch_rss_articles(max_age_days: int = None) -> list[dict]:
     for feed_url in CONFIG.RSS_FEEDS:
         logging.info(f"Fetching RSS: {feed_url}")
         try:
-            feed = feedparser.parse(feed_url)
+            resp = requests.get(feed_url, timeout=20, headers=_HEADERS)
+            resp.raise_for_status()
+            feed = feedparser.parse(resp.content)
             if feed.bozo:
                 logging.warning(f"RSS parse warning for {feed_url}: {feed.bozo_exception}")
 
