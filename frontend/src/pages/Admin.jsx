@@ -21,6 +21,38 @@ const fmtDuration = (startIso, endIso) => {
   return `${Math.floor(s / 60)}m ${s % 60}s`;
 };
 
+const fmtElapsed = (startIso) => {
+  if (!startIso) return null;
+  const s = Math.floor((Date.now() - new Date(startIso)) / 1000);
+  if (s < 60) return `${s}s`;
+  return `${Math.floor(s / 60)}m ${s % 60}s`;
+};
+
+// Parse log lines to derive current phase + teacher progress
+const parsePipelineProgress = (logLines, totalTeachers) => {
+  if (!logLines || logLines.length === 0) return { phase: 'Starting…', teachersDone: 0 };
+
+  let phase = 'Starting…';
+  let teachersDone = 0;
+  let teachersStarted = 0;
+
+  for (const { line } of logLines) {
+    if (line.includes('Embedding probe OK'))          phase = 'Probe OK — fetching RSS…';
+    if (line.includes('Fetching RSS'))                phase = 'Fetching RSS feeds…';
+    if (line.includes('Total RSS articles fetched'))  phase = 'RSS done — fetching ERIC…';
+    if (line.includes('ERIC fetching'))               phase = 'Fetching ERIC (slow)…';
+    if (line.includes('Ingestion phase 1'))           phase = 'Ingesting articles…';
+    if (line.includes('Ingestion phase 2'))           phase = 'Embedding articles…';
+    if (line.includes('Ingestion phase 3'))           phase = 'Tagging disciplines…';
+    if (line.includes('Processing teacher:'))         { phase = 'Evaluating teachers…'; teachersStarted++; }
+    if (line.includes('Yes articles this run'))       teachersDone++;
+    if (line.includes('Cleanup:'))                    phase = 'Cleanup pass…';
+    if (line.includes('Pipeline finished'))           phase = 'Done';
+  }
+
+  return { phase, teachersDone, teachersStarted };
+};
+
 const POLL_FAST = 2000;
 const POLL_SLOW = 10000;
 
@@ -34,8 +66,10 @@ const Admin = () => {
   const [pipelineStatus, setPipelineStatus] = useState({ runAllActive: false, running: [], logs: {}, history: [] });
   const [logTab, setLogTab] = useState('__all__');
   const [logsOpen, setLogsOpen] = useState(true);
+  const [elapsed, setElapsed] = useState(null);
   const terminalRef = useRef(null);
   const logSectionRef = useRef(null);
+  const elapsedTimer = useRef(null);
   const pollTimer = useRef(null);
 
   const navigate = useNavigate();
@@ -81,6 +115,20 @@ const Admin = () => {
     tick();
     return () => clearTimeout(pollTimer.current);
   }, [pollStatus, anyRunning]);
+
+  // Live elapsed timer — ticks every second while running
+  useEffect(() => {
+    clearInterval(elapsedTimer.current);
+    if (anyRunning) {
+      const startKey = runAllActive ? '__all__' : (running[0] || null);
+      const startIso = pipelineStatus.startTimes?.[startKey];
+      elapsedTimer.current = setInterval(() => setElapsed(fmtElapsed(startIso)), 1000);
+      setElapsed(fmtElapsed(startIso));
+    } else {
+      setElapsed(null);
+    }
+    return () => clearInterval(elapsedTimer.current);
+  }, [anyRunning, runAllActive, running, pipelineStatus.startTimes]);
 
   // Scroll within the terminal box only — never touch page scroll
   useEffect(() => {
@@ -323,9 +371,24 @@ const Admin = () => {
             Pipeline Log
             {anyRunning && <span className="admin-log-live-badge">LIVE</span>}
           </h2>
-          <button className="btn-admin-toggle" onClick={() => setLogsOpen(o => !o)}>
-            {logsOpen ? 'Collapse ▲' : 'Expand ▼'}
-          </button>
+          <div className="admin-log-header-right">
+            {anyRunning && (() => {
+              const activeLogs = currentLogs;
+              const { phase, teachersDone, teachersStarted } = parsePipelineProgress(activeLogs, users.length);
+              const teacherInfo = teachersStarted > 0
+                ? ` — ${teachersDone}/${users.length} teachers`
+                : '';
+              return (
+                <span className="admin-pipeline-status">
+                  <span className="admin-pipeline-phase">{phase}{teacherInfo}</span>
+                  {elapsed && <span className="admin-pipeline-elapsed">{elapsed}</span>}
+                </span>
+              );
+            })()}
+            <button className="btn-admin-toggle" onClick={() => setLogsOpen(o => !o)}>
+              {logsOpen ? 'Collapse ▲' : 'Expand ▼'}
+            </button>
+          </div>
         </div>
 
         {logsOpen && (

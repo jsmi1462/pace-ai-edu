@@ -12,6 +12,7 @@ let runAllActive = false;
 const teacherRunning = new Set();
 const activeProcs = new Map();   // email | '__all__' -> proc
 const logBuffers = new Map();    // email | '__all__' -> [{ts, line, stream}]
+const runStartTimes = new Map(); // email | '__all__' -> ISO startedAt
 const runHistory = [];           // last MAX_HISTORY entries
 const MAX_LOG_LINES = 500;
 const MAX_HISTORY = 50;
@@ -39,9 +40,14 @@ router.get('/pipeline-status', (req, res) => {
   for (const [key, buf] of logBuffers.entries()) {
     logs[key] = buf.slice(-200);
   }
+  const startTimes = {};
+  for (const [key, ts] of runStartTimes.entries()) {
+    startTimes[key] = ts;
+  }
   res.json({
     runAllActive,
     running: [...teacherRunning],
+    startTimes,
     logs,
     history: runHistory.slice().reverse(),
   });
@@ -147,6 +153,7 @@ router.post('/regenerate/:email', (req, res) => {
   teacherRunning.add(email);
   logBuffers.set(email, []);
   const startedAt = new Date().toISOString();
+  runStartTimes.set(email, startedAt);
   const proc = spawn(pythonBin(), ['-m', 'pipeline.workflow', '--teacher', email], { cwd: projectRoot });
   activeProcs.set(email, proc);
   proc.stdout.on('data', d => appendLog(email, 'stdout', d));
@@ -154,6 +161,7 @@ router.post('/regenerate/:email', (req, res) => {
   proc.on('close', (code) => {
     teacherRunning.delete(email);
     activeProcs.delete(email);
+    runStartTimes.delete(email);
     addHistory({ type: 'teacher', target: email, startedAt, endedAt: new Date().toISOString(), exitCode: code });
     if (code !== 0) console.error(`Pipeline failed for ${email} with exit code ${code}`);
   });
@@ -165,6 +173,7 @@ router.post('/run-all', (req, res) => {
   runAllActive = true;
   logBuffers.set('__all__', []);
   const startedAt = new Date().toISOString();
+  runStartTimes.set('__all__', startedAt);
   const proc = spawn(pythonBin(), ['-m', 'pipeline.workflow'], { cwd: projectRoot });
   activeProcs.set('__all__', proc);
   proc.stdout.on('data', d => appendLog('__all__', 'stdout', d));
@@ -172,6 +181,7 @@ router.post('/run-all', (req, res) => {
   proc.on('close', (code) => {
     runAllActive = false;
     activeProcs.delete('__all__');
+    runStartTimes.delete('__all__');
     addHistory({ type: 'all', target: null, startedAt, endedAt: new Date().toISOString(), exitCode: code });
     if (code !== 0) console.error(`Full pipeline run failed with exit code ${code}`);
   });

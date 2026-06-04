@@ -757,6 +757,28 @@ textarea.form-input:focus { border-color: var(--ink); }
   vertical-align: middle;
   animation: admin-pulse-anim 1.2s ease-in-out infinite;
 }
+.admin-log-header-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.admin-pipeline-status {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-family: var(--font-ui);
+  font-size: 0.6875rem;
+}
+.admin-pipeline-phase {
+  color: var(--ink-mid);
+  font-style: italic;
+}
+.admin-pipeline-elapsed {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #5a8a5a;
+  letter-spacing: 0.04em;
+}
 .btn-admin-toggle {
   font-family: var(--font-ui);
   font-size: 0.65rem;
