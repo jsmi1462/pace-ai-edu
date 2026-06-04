@@ -81,12 +81,12 @@ const Admin = () => {
     return () => clearTimeout(pollTimer.current);
   }, [pollStatus, anyRunning]);
 
-  // Auto-scroll log panel when new lines arrive
+  // Auto-scroll log panel only when a pipeline is actively running
   useEffect(() => {
-    if (logsOpen && logEndRef.current) {
+    if (logsOpen && anyRunning && logEndRef.current) {
       logEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [pipelineStatus.logs, logTab, logsOpen]);
+  }, [pipelineStatus.logs, logTab, logsOpen, anyRunning]);
 
   // Auto-open log panel when pipeline starts
   useEffect(() => {
