@@ -392,11 +392,11 @@ class DatabaseManager:
             return cur.fetchone()[0]
 
     def get_evaluated_article_ids(self, teacher_email: str) -> set[int]:
-        """Returns article IDs already evaluated (Yes or No) for this teacher — skip re-evaluation."""
+        """Returns article IDs already evaluated for this teacher — skip re-evaluation."""
         with self.conn.cursor() as cur:
             cur.execute(
                 """SELECT article_id FROM teacher_article_matches
-                   WHERE teacher_email = %s AND decision IN ('Yes', 'No')""",
+                   WHERE teacher_email = %s AND decision IS NOT NULL""",
                 (teacher_email,)
             )
             return {row[0] for row in cur.fetchall()}
