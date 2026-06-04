@@ -20,26 +20,44 @@ def _max_similarity(candidate: list[float], corpus: list[list[float]]) -> float:
     return max(_cosine_similarity(candidate, ref) for ref in corpus)
 
 
+_CIRCUIT_TRIP_AFTER = 3   # consecutive failures before going silent
+
+
 class ArticleEmbedder:
     def __init__(self):
+        # max_retries=0: the SDK's built-in retry is disabled — we handle
+        # failures ourselves via the circuit breaker below.
         self.client = OpenAI(
             base_url=CONFIG.LLM_BASE_URL,
             api_key=CONFIG.LLM_API_KEY,
+            max_retries=0,
         )
         self.model = CONFIG.LLM_EMBEDDING_MODEL
+        self._failures = 0
+        self.dead = False   # True once circuit trips; callers can check this
 
     def embed_text(self, text: str) -> list[float] | None:
         """Embeds a single string. Returns None on failure."""
-        if not text or not text.strip():
+        if self.dead or not text or not text.strip():
             return None
         try:
             response = self.client.embeddings.create(
                 model=self.model,
-                input=text[:8000],  # guard against very long texts
+                input=text[:8000],
             )
+            self._failures = 0  # reset on success
             return response.data[0].embedding
         except Exception as e:
-            logging.warning(f"Embedding failed: {e}")
+            self._failures += 1
+            if self._failures >= _CIRCUIT_TRIP_AFTER:
+                self.dead = True
+                logging.warning(
+                    f"Embedding circuit tripped after {_CIRCUIT_TRIP_AFTER} consecutive "
+                    f"failures — LM Studio is unreachable at {CONFIG.LLM_BASE_URL}. "
+                    "Embedding disabled for this run; falling back to keyword search."
+                )
+            else:
+                logging.warning(f"Embedding failed ({self._failures}/{_CIRCUIT_TRIP_AFTER}): {e}")
             return None
 
     def embed_article(self, article: dict) -> list[float] | None:

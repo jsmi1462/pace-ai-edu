@@ -173,15 +173,26 @@ class WorkflowManager:
                 teacher.get('current_module', ''),
             ]))
 
-        query_emb = embedder.embed_text(query_text)
-        if not query_emb:
-            logging.warning(f"  [{email}] Could not embed query — skipping.")
-            return 0
-
-        # 2. Vector search: top N candidates from discipline pool (+ general RSS)
+        query_emb  = embedder.embed_text(query_text)
         limit      = CONFIG.MAX_ARTICLES_PER_TEACHER * 10
-        candidates = self.db.search_articles_by_vector(discipline_key, query_emb, limit=limit)
-        logging.info(f"  [{email}] {len(candidates)} candidates from vector search.")
+
+        # 2a. Vector search (preferred)
+        if query_emb:
+            candidates = self.db.search_articles_by_vector(discipline_key, query_emb, limit=limit)
+            logging.info(f"  [{email}] {len(candidates)} candidates from vector search.")
+        else:
+            # 2b. Keyword fallback when embedding is unavailable
+            keywords = [
+                teacher.get('discipline', ''),
+                teacher.get('current_module', ''),
+                teacher.get('tailoring_query', ''),
+            ]
+            keywords = [k for k in keywords if k]
+            candidates = self.db.search_articles_by_keywords(keywords, limit=limit)
+            logging.warning(
+                f"  [{email}] Embedding unavailable — keyword fallback yielded "
+                f"{len(candidates)} candidates."
+            )
 
         if not candidates:
             logging.warning(f"  [{email}] No candidates — discipline pool may be empty.")
@@ -267,6 +278,34 @@ class WorkflowManager:
         logging.info(f"Cleanup: repaired {len(emb_pairs)}/{len(missing)} articles.")
 
     # ------------------------------------------------------------------
+    # Embedding health probe
+    # ------------------------------------------------------------------
+
+    def _probe_embedder(self, embedder: ArticleEmbedder, retries: int = 3, delay: int = 8) -> None:
+        """
+        Sends one test embed before the run begins.
+        If LM Studio is cold-starting it may need a few seconds to wake;
+        we retry a handful of times so the main pipeline sees a warm server.
+        """
+        for attempt in range(1, retries + 1):
+            result = embedder.embed_text("ping")
+            if result is not None:
+                embedder._failures = 0
+                embedder.dead = False
+                logging.info(f"Embedding probe OK (attempt {attempt}).")
+                return
+            if attempt < retries:
+                logging.warning(
+                    f"Embedding probe failed (attempt {attempt}/{retries}) — "
+                    f"waiting {delay}s for LM Studio to start…"
+                )
+                time.sleep(delay)
+
+        logging.warning(
+            "Embedding probe gave up — pipeline will run with keyword-search fallback."
+        )
+
+    # ------------------------------------------------------------------
     # Main execute
     # ------------------------------------------------------------------
 
@@ -282,6 +321,7 @@ class WorkflowManager:
 
             embedder  = ArticleEmbedder()
             evaluator = LLMEvaluator()
+            self._probe_embedder(embedder)
 
             if self.evaluate_only:
                 logging.info("evaluate-only mode: skipping ingestion.")
@@ -298,7 +338,10 @@ class WorkflowManager:
                     )
 
             logging.info(f"LLM stats: {evaluator.get_stats()}")
-            self._cleanup_run(embedder)
+            if embedder.dead:
+                logging.warning("Cleanup pass skipped — embedder is offline.")
+            else:
+                self._cleanup_run(embedder)
 
         except Exception as e:
             logging.critical(f"Critical pipeline failure: {e}", exc_info=True)
