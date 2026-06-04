@@ -61,4 +61,17 @@ router.post('/regenerate/:email', (req, res) => {
   res.json({ message: `Pipeline started for ${email}` });
 });
 
+// Run the full pipeline for all teachers in a single process (avoids parallel DB lock contention)
+router.post('/run-all', (req, res) => {
+  const pythonBin = process.env.PYTHON_BIN || 'python3';
+  const cwd = path.join(__dirname, '..', '..');
+
+  const proc = spawn(pythonBin, ['-m', 'pipeline.workflow'], { cwd });
+  proc.on('close', (code) => {
+    if (code !== 0) console.error(`Full pipeline run failed with exit code ${code}`);
+  });
+
+  res.json({ message: 'Full pipeline started for all teachers' });
+});
+
 module.exports = router;

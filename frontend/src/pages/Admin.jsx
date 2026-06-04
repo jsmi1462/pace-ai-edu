@@ -45,8 +45,11 @@ const Admin = () => {
 
   const runAll = async () => {
     setRunningAll(true);
-    await Promise.all(users.map(u => runPipeline(u.email)));
-    setRunningAll(false);
+    try {
+      await axios.post('/api/admin/run-all');
+    } finally {
+      setRunningAll(false);
+    }
   };
 
   if (loading) return <div className="page-content"><p className="loading">Loading…</p></div>;

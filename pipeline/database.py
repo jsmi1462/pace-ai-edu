@@ -62,8 +62,6 @@ class DatabaseManager:
                 updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """,
-            # Migrate existing faculty_profiles tables that predate discipline_key
-            "ALTER TABLE faculty_profiles ADD COLUMN IF NOT EXISTS discipline_key TEXT",
             """
             CREATE TABLE IF NOT EXISTS articles (
                 id                  SERIAL PRIMARY KEY,
