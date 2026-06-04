@@ -7,6 +7,13 @@ const formatDate = (dateStr) => {
   return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
 };
 
+const formatRunDate = (dateStr) => {
+  if (!dateStr) return '';
+  // Parse as local date (YYYY-MM-DD) to avoid UTC offset shifting the day
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+};
+
 const parseSteps = (raw) => {
   try { return JSON.parse(raw || '[]'); } catch { return []; }
 };
@@ -23,6 +30,9 @@ const Digest = () => {
   const [noMatches, setNoMatches] = useState(false);
   const [progress, setProgress] = useState({ evaluated: 0, total: 50 });
   const [timeRemaining, setTimeRemaining] = useState(null);
+  const [dates, setDates] = useState([]);
+  const [currentDate, setCurrentDate] = useState(null);
+  const [pastOpen, setPastOpen] = useState(false);
   const pollRef = useRef(null);
   const pollStartRef = useRef(null);
   const progressRef = useRef(null);
@@ -75,8 +85,11 @@ const Digest = () => {
     if (evaluated >= total && total > 0) {
       axios.get('/api/digest/me').then(res => {
         if (res.data.articles.length > 0) {
-          setArticles(res.data.articles);
-          setFresh(res.data.fresh);
+          const { articles, fresh, dates, currentDate } = res.data;
+          setArticles(articles);
+          setFresh(fresh);
+          setDates(dates || []);
+          setCurrentDate(currentDate || null);
           stopPolling();
           setRegenerating(false);
         } else {
@@ -92,16 +105,20 @@ const Digest = () => {
     }
   };
 
-  const fetchDigest = async () => {
+  const fetchDigest = async (date = null) => {
     setLoading(true);
     try {
+      const url = date ? `/api/digest/me?date=${date}` : '/api/digest/me';
       const [digestRes, profileRes] = await Promise.allSettled([
-        axios.get('/api/digest/me'),
+        axios.get(url),
         axios.get('/api/profile'),
       ]);
       if (digestRes.status === 'fulfilled') {
-        setArticles(digestRes.value.data.articles);
-        setFresh(digestRes.value.data.fresh);
+        const { articles, fresh, dates, currentDate } = digestRes.value.data;
+        setArticles(articles);
+        setFresh(fresh);
+        setDates(dates || []);
+        setCurrentDate(currentDate || null);
       }
       setHasProfile(profileRes.status === 'fulfilled');
     } catch (err) {
@@ -109,6 +126,11 @@ const Digest = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadDate = (date) => {
+    setPastOpen(false);
+    fetchDigest(date);
   };
 
   const pollForResults = () => {
@@ -125,8 +147,11 @@ const Digest = () => {
       try {
         const res = await axios.get('/api/digest/me');
         if (res.data.articles.length > 0) {
-          setArticles(res.data.articles);
-          setFresh(res.data.fresh);
+          const { articles, fresh, dates, currentDate } = res.data;
+          setArticles(articles);
+          setFresh(fresh);
+          setDates(dates || []);
+          setCurrentDate(currentDate || null);
           setHasProfile(true);
           stopPolling();
           setRegenerating(false);
@@ -170,11 +195,43 @@ const Digest = () => {
       <div className="digest-header">
         <div>
           <h1 className="digest-title">This Week's Reading</h1>
-          <p className="digest-subtitle">Research matched to your classroom, ready to use.</p>
+          <p className="digest-subtitle">
+            {currentDate ? formatRunDate(currentDate) : 'Research matched to your classroom, ready to use.'}
+          </p>
         </div>
-        <button className="btn-refresh" onClick={handleRegenerate} disabled={regenerating}>
-          {regenerating ? 'Generating…' : 'Refresh'}
-        </button>
+        <div className="digest-header-actions">
+          {dates.length > 1 && (
+            <div className="digest-past-wrapper">
+              <button
+                className="btn-past-issues"
+                onClick={() => setPastOpen(o => !o)}
+              >
+                Past issues {pastOpen ? '▲' : '▼'}
+              </button>
+              {pastOpen && (
+                <div className="digest-past-dropdown">
+                  {dates.slice(1).map(d => (
+                    <button
+                      key={d}
+                      className={`digest-past-item ${d === currentDate ? 'digest-past-item-active' : ''}`}
+                      onClick={() => loadDate(d)}
+                    >
+                      {formatRunDate(d)}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {currentDate && currentDate !== dates[0] && (
+            <button className="btn-past-issues" onClick={() => loadDate(null)}>
+              ← Latest
+            </button>
+          )}
+          <button className="btn-refresh" onClick={handleRegenerate} disabled={regenerating}>
+            {regenerating ? 'Generating…' : 'Refresh'}
+          </button>
+        </div>
       </div>
 
       {regenerating ? (

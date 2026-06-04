@@ -3,46 +3,55 @@ const router = express.Router();
 const pool = require('../db');
 
 // GET /digest/me - Fetch matched articles for the logged-in teacher
+// Optional ?date=YYYY-MM-DD to load a specific past run.
 router.get('/me', async (req, res) => {
   const email = req.user;
-  
-  try {
-    const articleQuery = `
-      SELECT
-        a.title,
-        a.source,
-        a.url,
-        a.authors,
-        a.publication_date,
-        tam.summary,
-        tam.action_steps,
-        tam.mission_alignment,
-        tam.similarity_score,
-        tam.date_evaluated,
-        tam.status
-      FROM teacher_article_matches tam
-      JOIN articles a ON tam.article_id = a.id
-      WHERE tam.teacher_email = $1
-        AND tam.decision = 'Yes'
-        AND tam.status IN ('pending', 'sent')
-      ORDER BY tam.status ASC, tam.similarity_score DESC, tam.date_evaluated DESC
-      LIMIT 10;
-    `;
-    const result = await pool.query(articleQuery, [email]);
+  const requestedDate = req.query.date || null;
 
-    const pending = result.rows.filter(r => r.status === 'pending');
-    const fresh = pending.length > 0;
-    const articles = fresh ? pending : result.rows;
+  try {
+    // All dates that have Yes matches for this teacher, newest first
+    const datesResult = await pool.query(
+      `SELECT DISTINCT date_evaluated::text
+       FROM teacher_article_matches
+       WHERE teacher_email = $1 AND decision = 'Yes' AND date_evaluated IS NOT NULL
+       ORDER BY date_evaluated DESC`,
+      [email]
+    );
+    const dates = datesResult.rows.map(r => r.date_evaluated);
+    const latestDate = dates[0] || null;
+    const targetDate = requestedDate || latestDate;
+
+    if (!targetDate) {
+      return res.json({ articles: [], dates: [], currentDate: null, fresh: false });
+    }
+
+    const result = await pool.query(
+      `SELECT
+         a.title, a.source, a.url, a.authors, a.publication_date,
+         tam.summary, tam.action_steps, tam.mission_alignment,
+         tam.similarity_score, tam.date_evaluated, tam.status
+       FROM teacher_article_matches tam
+       JOIN articles a ON tam.article_id = a.id
+       WHERE tam.teacher_email = $1
+         AND tam.decision = 'Yes'
+         AND tam.date_evaluated = $2
+       ORDER BY tam.similarity_score DESC
+       LIMIT 10`,
+      [email, targetDate]
+    );
+
+    const isLatest = targetDate === latestDate;
+    const fresh = isLatest && result.rows.some(r => r.status === 'pending');
 
     if (fresh) {
       await pool.query(
         `UPDATE teacher_article_matches SET status = 'sent'
-         WHERE teacher_email = $1 AND decision = 'Yes' AND status = 'pending'`,
-        [email]
+         WHERE teacher_email = $1 AND decision = 'Yes' AND date_evaluated = $2 AND status = 'pending'`,
+        [email, targetDate]
       );
     }
 
-    res.json({ articles, fresh });
+    res.json({ articles: result.rows, dates, currentDate: targetDate, fresh });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Database error' });
