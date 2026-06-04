@@ -6,5 +6,5 @@
 set -e
 cd /Users/compsci/pace-ai-edu
 
-PYTHON="${PYTHON_BIN:-python3}"
+PYTHON="${PYTHON_BIN:-/Users/compsci/pace-ai-edu/venv/bin/python3}"
 exec $PYTHON -m pipeline.workflow
