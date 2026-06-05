@@ -18,6 +18,13 @@ const parseSteps = (raw) => {
   try { return JSON.parse(raw || '[]'); } catch { return []; }
 };
 
+const decodeEntities = (str) => {
+  if (!str) return str;
+  const txt = document.createElement('textarea');
+  txt.innerHTML = str;
+  return txt.value;
+};
+
 // ── Hierarchical date navigator ───────────────────────────────────────────────
 // Current month → individual dates
 // Older months  → collapsed to "Month Year", expand on click
@@ -416,11 +423,11 @@ const Digest = () => {
 
                 <h2 className="article-title">
                   {article.url
-                    ? <a href={article.url} target="_blank" rel="noopener noreferrer">{article.title}</a>
-                    : article.title}
+                    ? <a href={article.url} target="_blank" rel="noopener noreferrer">{decodeEntities(article.title)}</a>
+                    : decodeEntities(article.title)}
                 </h2>
 
-                {meta && <p className="article-meta">{meta}</p>}
+                {meta && <p className="article-meta">{decodeEntities(meta)}</p>}
 
                 <p className="article-summary">{article.summary}</p>
 

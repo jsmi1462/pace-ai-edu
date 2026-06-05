@@ -277,23 +277,16 @@ class WorkflowManager:
                 except Exception as e:
                     logging.error(f"  Exception evaluating {art.get('source_id')}: {e}")
 
-        # 4. Cull excess Yes articles down to MAX_ARTICLES_PER_TEACHER
-        culled = select_best_articles(yes_results, max_count=CONFIG.MAX_ARTICLES_PER_TEACHER)
-        excess = [r for r in yes_results if r not in culled]
-        if not self.dry_run and excess:
-            for result in excess:
-                art   = result['article']
-                db_id = art.get('_db_id') or art.get('id')
-                if db_id:
-                    self.db.upsert_match(email, db_id, {"decision": "No",
-                        "summary": result.get('summary', ''),
-                        "action_steps": _json.dumps(result.get('action_steps', [])),
-                        "mission_alignment": result.get('mission_alignment', ''),
-                        "similarity_score": 1.0 - art.get('_distance', 1.0),
-                    })
+        # 4. Cull total Yes articles in DB down to MAX_ARTICLES_PER_TEACHER
+        # (DB-aware: accounts for Yes articles from previous partial runs)
+        if not self.dry_run:
+            downgraded = self.db.cull_yes_articles(email, CONFIG.MAX_ARTICLES_PER_TEACHER)
+            if downgraded:
+                logging.info(f"  [{email}] Culled {downgraded} excess Yes articles.")
 
-        logging.info(f"  [{email}]: {len(culled)} Yes articles this run.")
-        return len(culled)
+        kept = min(len(yes_results), CONFIG.MAX_ARTICLES_PER_TEACHER)
+        logging.info(f"  [{email}]: {len(yes_results)} Yes found this run, {kept} kept after cull.")
+        return kept
 
     # ------------------------------------------------------------------
     # End-of-run cleanup

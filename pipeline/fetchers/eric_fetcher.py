@@ -166,7 +166,7 @@ def _fetch_query(
             url = doc.get("url") or f"https://eric.ed.gov/?id={eric_id}"
             source_id = hashlib.sha256(eric_id.encode()).hexdigest()[:32]
             authors = doc.get("author") or []
-            authors_str = ", ".join(authors) if isinstance(authors, list) else str(authors)
+            authors_str = html.unescape(", ".join(authors) if isinstance(authors, list) else str(authors))
 
             articles.append({
                 "source_id":        source_id,

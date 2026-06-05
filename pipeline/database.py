@@ -453,6 +453,34 @@ class DatabaseManager:
             cur.execute("SELECT COUNT(*) FROM articles;")
             return cur.fetchone()[0]
 
+    def cull_yes_articles(self, teacher_email: str, max_count: int) -> int:
+        """
+        Keeps the top `max_count` Yes articles (by similarity_score) for a teacher
+        and downgrades the rest to No. Called at end of each run to enforce the digest limit
+        regardless of how many partial runs contributed Yes results.
+        Returns the number of articles downgraded.
+        """
+        q = """
+            WITH ranked AS (
+                SELECT id, ROW_NUMBER() OVER (ORDER BY similarity_score DESC NULLS LAST) AS rn
+                FROM teacher_article_matches
+                WHERE teacher_email = %s AND decision = 'Yes'
+            )
+            UPDATE teacher_article_matches
+               SET decision = 'No'
+             WHERE id IN (SELECT id FROM ranked WHERE rn > %s)
+        """
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(q, (teacher_email, max_count))
+                count = cur.rowcount
+            self.conn.commit()
+            return count
+        except Exception as e:
+            logging.warning(f"cull_yes_articles failed for {teacher_email}: {e}")
+            self.conn.rollback()
+            return 0
+
     def get_evaluated_article_ids(self, teacher_email: str) -> set[int]:
         """Returns article IDs already evaluated (Yes or No) for this teacher — skip re-evaluation.
         Error decisions are excluded so failed evaluations are retried on the next run."""
