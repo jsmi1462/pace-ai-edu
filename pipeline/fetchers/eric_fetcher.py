@@ -56,6 +56,8 @@ DISCIPLINE_ERIC_QUERIES: dict[str, str] = {
     # Cross-division
     "global_leadership":  "global education international competency cross-cultural service learning",
     "counseling":         "school counseling social emotional learning adolescent mental health SEL",
+    "edtech":             "educational technology artificial intelligence K-12 digital learning instructional technology information literacy AI schools",
+    "school_admin":       "school leadership principal administration educational leadership instructional leadership professional development faculty",
 }
 
 # Publication types worth keeping (peer-reviewed research and practitioner reports)
