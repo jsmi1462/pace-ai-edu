@@ -250,8 +250,8 @@ class WorkflowManager:
 
         candidates = new_candidates
 
-        # 3. LLM evaluation (sequential — LM Studio processes one at a time anyway)
-        results = []
+        # 3. LLM evaluation — write each result immediately so cancellation preserves progress
+        yes_results = []
         with ThreadPoolExecutor(max_workers=CONFIG.MAX_LLM_CONCURRENT_REQUESTS) as ex:
             future_to_art = {
                 ex.submit(evaluator.evaluate, art, teacher, rated_titles): art
@@ -261,28 +261,35 @@ class WorkflowManager:
                 art = future_to_art[future]
                 try:
                     result = future.result()
-                    result['article'] = art
-                    results.append(result)
+                    if result['decision'] == 'Yes':
+                        yes_results.append(result)
+                    if not self.dry_run:
+                        db_id = art.get('_db_id') or art.get('id')
+                        if db_id:
+                            steps = result.get('action_steps', [])
+                            self.db.upsert_match(email, db_id, {
+                                "decision":          result['decision'],
+                                "summary":           result.get('summary', ''),
+                                "action_steps":      _json.dumps(steps) if isinstance(steps, list) else steps,
+                                "mission_alignment": result.get('mission_alignment', ''),
+                                "similarity_score":  1.0 - art.get('_distance', 1.0),
+                            })
                 except Exception as e:
                     logging.error(f"  Exception evaluating {art.get('source_id')}: {e}")
 
-        # 4. Cull to top N Yes articles by vector distance
-        yes_results = [r for r in results if r['decision'] == 'Yes']
-        culled      = select_best_articles(yes_results, max_count=CONFIG.MAX_ARTICLES_PER_TEACHER)
-        to_persist  = culled + [r for r in results if r['decision'] != 'Yes']
-
-        if not self.dry_run:
-            for result in to_persist:
+        # 4. Cull excess Yes articles down to MAX_ARTICLES_PER_TEACHER
+        culled = select_best_articles(yes_results, max_count=CONFIG.MAX_ARTICLES_PER_TEACHER)
+        excess = [r for r in yes_results if r not in culled]
+        if not self.dry_run and excess:
+            for result in excess:
                 art   = result['article']
                 db_id = art.get('_db_id') or art.get('id')
                 if db_id:
-                    steps = result.get('action_steps', [])
-                    self.db.upsert_match(email, db_id, {
-                        "decision":          result['decision'],
-                        "summary":           result.get('summary', ''),
-                        "action_steps":      _json.dumps(steps) if isinstance(steps, list) else steps,
+                    self.db.upsert_match(email, db_id, {"decision": "No",
+                        "summary": result.get('summary', ''),
+                        "action_steps": _json.dumps(result.get('action_steps', [])),
                         "mission_alignment": result.get('mission_alignment', ''),
-                        "similarity_score":  1.0 - art.get('_distance', 1.0),  # convert distance → similarity
+                        "similarity_score": 1.0 - art.get('_distance', 1.0),
                     })
 
         logging.info(f"  [{email}]: {len(culled)} Yes articles this run.")

@@ -196,7 +196,7 @@ class LLMEvaluator:
             f"Respond with ONLY the JSON object."
         )
 
-        raw = self._call(label, user_prompt, system_prompt, max_tokens=1024)
+        raw = self._call(label, user_prompt, system_prompt, max_tokens=2048)
 
         if raw.startswith("LLM Error"):
             return {"decision": "Error", "summary": raw, "action_steps": [], "mission_alignment": ""}
