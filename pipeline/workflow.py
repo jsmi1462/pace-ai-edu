@@ -363,6 +363,7 @@ class WorkflowManager:
             embedder  = ArticleEmbedder()
             evaluator = LLMEvaluator()
             self._probe_embedder(embedder)
+            evaluator.warm_up(CONFIG.MAX_LLM_CONCURRENT_REQUESTS)
 
             if self.evaluate_only:
                 logging.info("Evaluate-only mode: skipping ingestion.")

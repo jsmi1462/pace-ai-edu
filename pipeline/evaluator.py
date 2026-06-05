@@ -137,6 +137,27 @@ class LLMEvaluator:
         logging.error(f"[{label}] LLM failed definitively across all endpoints: {last_error}")
         return f"LLM Error - {last_error}"
 
+    def warm_up(self, concurrency: int) -> None:
+        """
+        Fires `concurrency` tiny concurrent requests through the LLM endpoint.
+        When routing through LiteLLM, this distributes to all backends simultaneously,
+        triggering JIT model loading on each machine before real evaluation begins.
+        """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        def _ping(_):
+            try:
+                self._call("warm_up", "Reply OK.", "You are a helpful assistant.", max_tokens=3)
+            except Exception:
+                pass
+
+        logging.info(f"LLM warm-up: firing {concurrency} concurrent requests to wake all backends...")
+        with ThreadPoolExecutor(max_workers=concurrency) as ex:
+            futures = [ex.submit(_ping, i) for i in range(concurrency)]
+            for f in as_completed(futures):
+                pass
+        logging.info("LLM warm-up complete.")
+
     def generate_keywords(self, teacher: dict) -> list[str]:
         """
         Generates search keywords for a teacher profile.
