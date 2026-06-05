@@ -106,6 +106,14 @@ class DatabaseManager:
             """ALTER TABLE teacher_article_matches
                ADD COLUMN IF NOT EXISTS user_rating VARCHAR(12)
                CHECK (user_rating IN ('awesome', 'good', 'bad', 'irrelevant'))""",
+            # Pipeline metadata: tracks last full ingestion time etc.
+            """
+            CREATE TABLE IF NOT EXISTS pipeline_meta (
+                key        TEXT PRIMARY KEY,
+                value      TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """,
         ]
         try:
             with self.conn.cursor() as cur:
@@ -197,6 +205,44 @@ class DatabaseManager:
         with self.conn.cursor(cursor_factory=DictCursor) as cur:
             cur.execute(q, params)
             return [dict(row) for row in cur.fetchall()]
+
+    # ------------------------------------------------------------------
+    # Pipeline metadata
+    # ------------------------------------------------------------------
+
+    def get_last_ingest_time(self):
+        """Returns the datetime of the last completed full ingestion, or None."""
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(
+                    "SELECT value FROM pipeline_meta WHERE key = 'last_full_ingest'"
+                )
+                row = cur.fetchone()
+            if row:
+                from datetime import datetime
+                return datetime.fromisoformat(row[0])
+            return None
+        except Exception as e:
+            logging.warning(f"get_last_ingest_time failed: {e}")
+            self.conn.rollback()
+            return None
+
+    def set_last_ingest_time(self) -> None:
+        """Stamps the current time as the last completed full ingestion."""
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO pipeline_meta (key, value, updated_at)
+                    VALUES ('last_full_ingest', NOW()::text, NOW())
+                    ON CONFLICT (key) DO UPDATE
+                        SET value = NOW()::text, updated_at = NOW()
+                    """
+                )
+            self.conn.commit()
+        except Exception as e:
+            logging.warning(f"set_last_ingest_time failed: {e}")
+            self.conn.rollback()
 
     # ------------------------------------------------------------------
     # Articles
@@ -346,11 +392,13 @@ class DatabaseManager:
         discipline_key: str | None,
         query_embedding: list[float],
         limit: int = 50,
+        min_similarity: float | None = None,
     ) -> list[dict]:
         """
         Returns the top `limit` articles ordered by cosine distance to query_embedding,
         filtered to the teacher's discipline pool plus 'general' (RSS articles).
         Falls back to searching all tagged articles if discipline_key is None.
+        min_similarity filters out articles below that cosine similarity (1 - distance).
         """
         vec = '[' + ','.join(f'{x:.8f}' for x in query_embedding) + ']'
 
@@ -366,14 +414,21 @@ class DatabaseManager:
             )"""
             exists_params = ()
 
+        max_distance = (1.0 - min_similarity) if min_similarity is not None else None
+        distance_filter = f"AND distance < {max_distance:.6f}" if max_distance is not None else ""
+
         q = f"""
-            SELECT
-                a.id, a.source_id, a.source, a.title, a.full_text,
-                a.authors, a.publication_date, a.url,
-                (a.embedding <=> %s::vector) AS distance
-            FROM articles a
-            WHERE {exists_clause}
-              AND a.embedding IS NOT NULL
+            WITH scored AS (
+                SELECT
+                    a.id, a.source_id, a.source, a.title, a.full_text,
+                    a.authors, a.publication_date, a.url,
+                    (a.embedding <=> %s::vector) AS distance
+                FROM articles a
+                WHERE {exists_clause}
+                  AND a.embedding IS NOT NULL
+            )
+            SELECT * FROM scored
+            WHERE 1=1 {distance_filter}
             ORDER BY distance ASC
             LIMIT %s;
         """

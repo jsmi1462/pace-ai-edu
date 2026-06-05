@@ -38,7 +38,11 @@ class Config:
     # Rocchio preference nudge — how strongly user ratings bias the query vector (0–1)
     ROCCHIO_ALPHA                 = float(os.getenv("ROCCHIO_ALPHA", 0.5))
     MIN_ARTICLES_PER_TEACHER      = int(os.getenv("MIN_ARTICLES_PER_TEACHER", 3))
-    MAX_ARTICLES_PER_TEACHER      = int(os.getenv("MAX_ARTICLES_PER_TEACHER", 7))
+    MAX_ARTICLES_PER_TEACHER      = int(os.getenv("MAX_ARTICLES_PER_TEACHER", 5))
+    # How many candidates the vector search hands to the LLM — tune this up in .env
+    MAX_CANDIDATES_PER_TEACHER    = int(os.getenv("MAX_CANDIDATES_PER_TEACHER", 200))
+    # Single-teacher runs skip ingestion if a full run completed within this many days
+    INGEST_FRESHNESS_DAYS         = int(os.getenv("INGEST_FRESHNESS_DAYS", 7))
 
     # RSS feeds — confirmed working as of 2026-06
     RSS_FEEDS = [

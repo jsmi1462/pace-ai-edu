@@ -200,7 +200,7 @@ class WorkflowManager:
             ]))
 
         query_emb  = embedder.embed_text(query_text)
-        limit      = CONFIG.MAX_ARTICLES_PER_TEACHER * 10
+        limit      = CONFIG.MAX_CANDIDATES_PER_TEACHER
 
         # Apply Rocchio preference nudge from user ratings
         if query_emb:
@@ -215,7 +215,11 @@ class WorkflowManager:
 
         # 2a. Vector search (preferred)
         if query_emb:
-            candidates = self.db.search_articles_by_vector(discipline_key, query_emb, limit=limit)
+            candidates = self.db.search_articles_by_vector(
+                discipline_key, query_emb,
+                limit=limit,
+                min_similarity=CONFIG.SIMILARITY_LOW_THRESHOLD,
+            )
             logging.info(f"  [{email}] {len(candidates)} candidates from vector search.")
         else:
             # 2b. Keyword fallback when embedding is unavailable
@@ -361,9 +365,23 @@ class WorkflowManager:
             self._probe_embedder(embedder)
 
             if self.evaluate_only:
-                logging.info("evaluate-only mode: skipping ingestion.")
+                logging.info("Evaluate-only mode: skipping ingestion.")
+            elif self.teacher_email:
+                last = self.db.get_last_ingest_time()
+                age_days = (datetime.now() - last).days if last else None
+                if last and age_days < CONFIG.INGEST_FRESHNESS_DAYS:
+                    logging.info(
+                        f"Ingestion skipped — full ingest ran {age_days}d ago "
+                        f"(threshold: {CONFIG.INGEST_FRESHNESS_DAYS}d). Using existing article pool."
+                    )
+                else:
+                    reason = f"{age_days}d ago" if last else "never"
+                    logging.info(f"Last full ingest: {reason} — running ingestion before evaluating teacher.")
+                    self._ingest_articles(teachers, embedder)
+                    self.db.set_last_ingest_time()
             else:
                 self._ingest_articles(teachers, embedder)
+                self.db.set_last_ingest_time()
 
             logging.info(f"Processing {len(teachers)} teacher(s).")
             for teacher in teachers:
@@ -418,13 +436,14 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Pace AI Edu — pipeline runner")
-    parser.add_argument("--teacher",  type=str,  default=None, help="Run for a single teacher email.")
-    parser.add_argument("--dry-run",  action="store_true",     help="Fetch and evaluate but do not write to DB.")
+    parser.add_argument("--teacher",       type=str,  default=None, help="Run for a single teacher email.")
+    parser.add_argument("--dry-run",       action="store_true",     help="Fetch and evaluate but do not write to DB.")
+    parser.add_argument("--evaluate-only", action="store_true",     help="Skip all ingestion; evaluate against existing article pool.")
     args = parser.parse_args()
 
     _setup_logging()
 
-    wm = WorkflowManager(teacher_email=args.teacher, dry_run=args.dry_run)
+    wm = WorkflowManager(teacher_email=args.teacher, dry_run=args.dry_run, evaluate_only=args.evaluate_only)
     if not wm.initialize():
         sys.exit(1)
     wm.execute()
